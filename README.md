@@ -1,76 +1,91 @@
-# 📝 ARB Universal IDE & AI Compiler
+# ARB Universal IDE & AI Compiler
 
 <p align="center">
-  <img src="https://shields.io" alt="Model Used">
-  <img src="https://shields.io" alt="Platform Support">
-  <img src="https://shields.io" alt="License">
+  Turn plain-English instructions into code in the language you choose.
 </p>
 
 <p align="center">
-  <b>Programming, simplified. Write instructions row-by-row in plain English. No complex indentation. No syntax boilerplate.</b>
+  <img src="https://img.shields.io/badge/AI%20provider-Groq-F55036?style=for-the-badge&logo=groq&logoColor=white" alt="AI provider: Groq">
+  <img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20macOS%20%7C%20Linux-4C8EDA?style=for-the-badge" alt="Platforms: Windows, macOS, and Linux source setup">
+  <a href="https://opensource.org/license/mit">
+    <img src="https://img.shields.io/badge/License-MIT-2ea44f?style=for-the-badge" alt="MIT License">
+  </a>
 </p>
 
 <p align="center">
-  <a href="https://github.com">
-    <img src="https://shields.io📥_Download-Windows_Installer-007acc?style=for-the-badge&logo=windows" alt="Download Installer" height="40">
+  <a href="https://github.com/aaravroybhattacharya-sketch/arb-universal-ide/releases/tag/v1.0.0">
+    <img src="https://img.shields.io/badge/Download-Windows%20Installer-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download the Windows installer">
   </a>
 </p>
 
 ---
 
-## ⚡ What is ARB?
+## What is ARB?
 
-**ARB** is an AI-driven, multi-language transpiler IDE. It allows you to write programmatic logic using standard English phrasing. The engine parses your unstructured pseudo-code block by block, automatically figures out and installs any required dependencies via an **Automated Pipeline**, and outputs executable script blocks targeting the language of your choice.
+**ARB** is an AI-powered, multi-language transpiler IDE. Describe program logic in everyday English, and ARB turns it into executable code. Its automated pipeline can identify and install dependencies required by your instructions.
 
-### 🚀 Key Features
+> **Model information:** The published setup uses a `GROQ_API_KEY`, which identifies Groq as the AI provider. The repository does not document the specific model ID, so it is not listed as a model name here.
 
-* **Zero-Indentation Logic:** Express loops, conditional flows, and array states using pure conversational structuring.
-* **Auto-Dependency Management:** If your plain-English code calls for data sheets or web scraping, ARB instantly identifies, fetches, and installs packages like `pandas` or `requests` silently before execution.
-* **Multi-Language Architecture:** Write once in English, and compile cleanly into **Python, C, Java, JavaScript, HTML & CSS, C++, or Go**.
-* **Direct File Export:** Saves output natively using the matching language extensions (e.g., `.py`, `.c`, `.js`) instead of custom runtime formats.
+## Features
 
----
+- **Write without indentation:** Describe loops, conditions, and lists in plain language.
+- **Automated dependency management:** Identify and install packages needed by your instructions.
+- **Multiple output languages:** Generate Python, C, Java, JavaScript, HTML/CSS, C++, or Go.
+- **Native file export:** Save generated code with the appropriate file extension, such as `.py`, `.c`, or `.js`.
 
-## 💻 Language Comparison Showcase
+## Example
 
-| Target Language | Your English Input Code | Compiled Production Output |
-| :--- | :--- | :--- |
-| **Python** | `create a variable numbers from 1 to 5`<br>`loop through numbers`<br>`if number is even print "Even:" and the number` | `numbers = list(range(1, 6))`<br>`for num in numbers:`<br>`    if num % 2 == 0:`<br>`        print(f"Even: {num}")` |
-| **JavaScript** | `declare user score as 100`<br>`if score is greater than 50 print "Passed"` | `let userScore = 100;`<br>`if (userScore > 50) {`<br>`    console.log("Passed");`<br>`}` |
+**English instructions**
 
----
-
-## 📦 How to Build Natively from Source
-
-If you prefer running or tweaking the Python source code directly instead of utilizing our downloadable `Setup.exe` installer, follow these quick configuration steps:
-
-### 1. Clone the Workspace Environment
-```bash
-git clone https://github.com
-cd YOUR_REPO_NAME
+```text
+create a variable numbers from 1 to 5
+loop through numbers
+if number is even print "Even:" and the number
 ```
 
-### 2. Set Up Your API Key Credentials
-ARB uses an OpenAI-compatible ecosystem interface runner. Get your free secret key token from your console dashboard and apply it securely to your machine terminal paths:
+**Python output**
 
-**Windows PowerShell:**
+```python
+numbers = list(range(1, 6))
+for num in numbers:
+    if num % 2 == 0:
+        print(f"Even: {num}")
+```
+
+## Build from source
+
+The release provides a Windows installer. You can also run the Python source on Windows, macOS, or Linux.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/aaravroybhattacharya-sketch/arb-universal-ide.git
+cd arb-universal-ide
+```
+
+### 2. Configure your Groq API key
+
+Create an API key in your Groq account and set it in your terminal. Keep the key private.
+
+**Windows PowerShell**
+
 ```powershell
-\$env:GROQ_API_KEY="your_api_key_string_here"
+$env:GROQ_API_KEY="your_api_key"
 ```
 
-**Linux / Mac Terminal:**
+**macOS / Linux**
+
 ```bash
-export GROQ_API_KEY="your_api_key_string_here"
+export GROQ_API_KEY="your_api_key"
 ```
 
-### 3. Launch the App Window Engine
+### 3. Install dependencies and run
+
 ```bash
 pip install groq pyinstaller
 python app.py
 ```
 
----
+## License
 
-## 🛠️ Free Licensing Deployment Info
-
-This ecosystem application configuration framework is distributed entirely as open-source code architecture under the **MIT License**. Check out our live developer portfolio page links to test active roadmap updates!
+ARB is distributed under the **MIT License**. See the [MIT License text](https://opensource.org/license/mit).
