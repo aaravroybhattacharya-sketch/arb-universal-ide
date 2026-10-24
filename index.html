@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1020">
+  <meta name="description" content="Turn plain-English instructions into executable code with ARB, the AI-powered multi-language IDE.">
+  <title>ARB — Build with words</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: #111a2e;
+      --panel-light: #16223a;
+      --text: #f4f7ff;
+      --muted: #a6b1c7;
+      --line: rgba(174, 194, 230, .14);
+      --blue: #79a9ff;
+      --mint: #8ce7c4;
+      --purple: #b7a1ff;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(ellipse at 50% -20%, rgba(71, 103, 187, .24), transparent 55%),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; }
+    .container { width: min(1100px, calc(100% - 40px)); margin-inline: auto; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      border-bottom: 1px solid var(--line);
+      background: rgba(11, 16, 32, .82);
+      backdrop-filter: blur(16px);
+    }
+    .nav {
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .brand { display: inline-flex; align-items: center; gap: 11px; font-weight: 750; letter-spacing: -.04em; }
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border-radius: 11px;
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      color: #0b1020;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: -.06em;
+    }
+    .brand-name { font-size: 19px; }
+    .brand-name span { color: var(--blue); }
+    .nav-links { display: flex; align-items: center; gap: 28px; color: var(--muted); font-size: 14px; }
+    .nav-links a:hover, .text-link:hover { color: var(--text); }
+    .button {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      padding: 0 17px;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      background: var(--blue);
+      color: #0a1020;
+      font-size: 14px;
+      font-weight: 750;
+      transition: transform .18s ease, filter .18s ease;
+    }
+    .button:hover { transform: translateY(-2px); filter: brightness(1.08); }
+    .button.secondary { border-color: var(--line); background: rgba(255,255,255,.035); color: var(--text); }
+    .hero { padding: 92px 0 62px; text-align: center; }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 7px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,.035);
+      color: #d6e1f7;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .eyebrow-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 14px var(--mint); }
+    h1 {
+      max-width: 850px;
+      margin: 23px auto 18px;
+      font-size: clamp(44px, 7.5vw, 78px);
+      line-height: 1.04;
+      letter-spacing: -.065em;
+    }
+    .gradient-text { background: linear-gradient(100deg, #8fb8ff, #c0a8ff 55%, #8ce7c4); background-clip: text; color: transparent; }
+    .hero-copy { max-width: 650px; margin: 0 auto; color: var(--muted); font-size: clamp(16px, 2vw, 19px); }
+    .hero-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 29px; }
+    .fine-print { margin-top: 14px; color: #78859e; font-size: 12px; }
+    .preview-wrap { padding: 16px 0 78px; }
+    .preview {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #0d1425;
+      box-shadow: 0 30px 100px rgba(0,0,0,.28);
+    }
+    .preview-bar {
+      min-height: 51px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.025);
+      color: #8593ac;
+      font-size: 12px;
+    }
+    .window-dots { display: flex; gap: 6px; }
+    .window-dots i { width: 8px; height: 8px; border-radius: 50%; background: #71809a; opacity: .7; }
+    .preview-label { color: #9daac0; }
+    .language-label { color: var(--blue); }
+    .editor-grid { display: grid; grid-template-columns: 1fr 1fr; }
+    .editor-panel { min-width: 0; padding: 24px 27px 28px; }
+    .editor-panel + .editor-panel { border-left: 1px solid var(--line); background: rgba(0,0,0,.12); }
+    .panel-title { margin-bottom: 17px; color: #78869f; font-size: 10px; font-weight: 750; letter-spacing: .15em; text-transform: uppercase; }
+    pre, code, .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    pre { margin: 0; overflow-x: auto; color: #dce6f8; font-size: 13px; line-height: 1.9; white-space: pre-wrap; }
+    .prompt { color: var(--blue); }
+    .output { color: var(--mint); }
+    .section { padding: 48px 0 78px; }
+    .section-heading { max-width: 620px; margin: 0 auto 35px; text-align: center; }
+    .kicker { color: var(--blue); font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+    h2 { margin: 10px 0; font-size: clamp(30px, 4vw, 43px); line-height: 1.13; letter-spacing: -.045em; }
+    .section-heading p, .card p, .step p { color: var(--muted); }
+    .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+    .card {
+      min-height: 190px;
+      padding: 23px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: linear-gradient(150deg, rgba(255,255,255,.045), rgba(255,255,255,.012));
+    }
+    .card-icon {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 18px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      color: var(--mint);
+      font-weight: 800;
+    }
+    .card h3 { margin: 0 0 7px; font-size: 16px; letter-spacing: -.02em; }
+    .card p { margin: 0; font-size: 13px; }
+    .languages {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 25px;
+    }
+    .language-chip { padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; color: #c3cee2; font-size: 12px; }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; counter-reset: steps; }
+    .step { position: relative; padding: 5px 0 0 48px; counter-increment: steps; }
+    .step::before {
+      content: "0" counter(steps);
+      position: absolute;
+      top: 0;
+      left: 0;
+      color: var(--blue);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 13px;
+    }
+    .step h3 { margin: 0; font-size: 15px; }
+    .step p { margin: 8px 0 0; font-size: 13px; }
+    .setup {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+      gap: 36px;
+      padding: 32px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(121,169,255,.09), rgba(183,161,255,.045));
+    }
+    .setup h2 { font-size: clamp(26px, 3.5vw, 36px); }
+    .setup p { color: var(--muted); font-size: 14px; }
+    .setup code { color: var(--mint); }
+    .setup-block {
+      padding: 19px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #0b1020;
+      color: #dce6f8;
+      font-size: 12px;
+      line-height: 2;
+      overflow-wrap: anywhere;
+    }
+    .setup-block span { color: #8290a9; }
+    footer { margin-top: 70px; border-top: 1px solid var(--line); }
+    .footer-content { min-height: 78px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: #8290a9; font-size: 12px; }
+    .footer-links { display: flex; gap: 18px; }
+    .text-link { color: #c4d0e4; }
+    @media (max-width: 720px) {
+      .container { width: min(100% - 30px, 560px); }
+      .nav { min-height: 64px; }
+      .nav-links { display: none; }
+      .hero { padding: 68px 0 45px; }
+      .preview-wrap { padding-bottom: 55px; }
+      .editor-grid, .feature-grid, .steps, .setup { grid-template-columns: 1fr; }
+      .editor-panel + .editor-panel { border-top: 1px solid var(--line); border-left: 0; }
+      .section { padding: 34px 0 55px; }
+      .setup { gap: 10px; padding: 23px; }
+      .footer-content { padding: 18px 0; align-items: flex-start; flex-direction: column; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <nav class="container nav" aria-label="Main navigation">
+      <a class="brand" href="#" aria-label="ARB home">
+        <span class="brand-mark">ARB</span>
+        <span class="brand-name">ARB<span>.ide</span></span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="#get-started">Get started</a>
+      </div>
+      <a class="button secondary" href="https://github.com/aaravroybhattacharya-sketch/arb-universal-ide/releases/tag/v1.0.0">View release <span aria-hidden="true">↗</span></a>
+    </nav>
+  </div>
+
+  <main>
+    <header class="container hero">
+      <div class="eyebrow"><span class="eyebrow-dot"></span> Your ideas, translated into code</div>
+      <h1>Build with words.<br><span class="gradient-text">Create in any language.</span></h1>
+      <p class="hero-copy">Describe your program in plain English. ARB helps turn your logic into executable code, so you can focus on what you want to build.</p>
+      <div class="hero-actions">
+        <a class="button" href="https://github.com/aaravroybhattacharya-sketch/arb-universal-ide/releases/tag/v1.0.0">Get ARB for Windows <span aria-hidden="true">↗</span></a>
+        <a class="button secondary" href="https://github.com/aaravroybhattacharya-sketch/arb-universal-ide">Explore the source</a>
+      </div>
+      <div class="fine-print">AI-powered with Groq · Free and open source · MIT License</div>
+    </header>
+
+    <section class="container preview-wrap" aria-label="Example plain-English instructions and generated code">
+      <div class="preview">
+        <div class="preview-bar">
+          <div class="window-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+          <span class="preview-label">ARB example <span aria-hidden="true">/</span> even_numbers</span>
+          <span class="language-label">Python output</span>
+        </div>
+        <div class="editor-grid">
+          <div class="editor-panel">
+            <div class="panel-title">Plain-English instructions</div>
+            <pre><span class="prompt">create</span> a variable numbers from 1 to 5
+<span class="prompt">loop</span> through each number in numbers
+  <span class="prompt">if</span> the number is even
+    <span class="prompt">print</span> "Even:" and the number</pre>
+          </div>
+          <div class="editor-panel">
+            <div class="panel-title">Example Python output</div>
+            <pre class="output">numbers = list(range(1, 6))
+for num in numbers:
+    if num % 2 == 0:
+        print(f"Even: {num}")</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container section" id="features">
+      <div class="section-heading">
+        <div class="kicker">Less syntax, more ideas</div>
+        <h2>From thought to source code</h2>
+        <p>ARB streamlines the first step from an idea to a working program, with language choices and useful export options built in.</p>
+      </div>
+      <div class="feature-grid">
+        <article class="card">
+          <div class="card-icon" aria-hidden="true">Aa</div>
+          <h3>Write in plain English</h3>
+          <p>Describe variables, loops, conditions, and other program logic without worrying about indentation.</p>
+        </article>
+        <article class="card">
+          <div class="card-icon" aria-hidden="true">{"}"</div>
+          <h3>Choose your output</h3>
+          <p>Generate source code for the language that fits your project, then save it with a native file extension.</p>
+        </article>
+        <article class="card">
+          <div class="card-icon" aria-hidden="true">+</div>
+          <h3>Dependency assistance</h3>
+          <p>For Python output, ARB can identify missing imported packages and attempt to install them with pip.</p>
+        </article>
+      </div>
+      <div class="languages" aria-label="Supported output languages">
+        <span class="language-chip">Python</span>
+        <span class="language-chip">C</span>
+        <span class="language-chip">Java</span>
+        <span class="language-chip">JavaScript</span>
+        <span class="language-chip">HTML &amp; CSS</span>
+        <span class="language-chip">C++</span>
+        <span class="language-chip">Go</span>
+      </div>
+    </section>
+
+    <section class="container section" id="how-it-works">
+      <div class="section-heading">
+        <div class="kicker">A simple workflow</div>
+        <h2>Make an idea executable</h2>
+      </div>
+      <div class="steps">
+        <article class="step">
+          <h3>Describe your logic</h3>
+          <p>Write what your program should do in everyday language.</p>
+        </article>
+        <article class="step">
+          <h3>Select a language</h3>
+          <p>Choose from seven supported output languages in the ARB desktop app.</p>
+        </article>
+        <article class="step">
+          <h3>Generate and save</h3>
+          <p>ARB asks Groq to generate code, then saves the source using its matching extension.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="container section" id="get-started">
+      <div class="setup">
+        <div>
+          <div class="kicker">Get started</div>
+          <h2>Run ARB from source</h2>
+          <p>Install the dependencies, set your Groq API key in your environment, and launch the desktop app. Keep your key private.</p>
+          <a class="text-link" href="https://github.com/aaravroybhattacharya-sketch/arb-universal-ide#build-from-source">Read the setup instructions <span aria-hidden="true">→</span></a>
+        </div>
+        <div class="setup-block mono" aria-label="Setup commands">
+          <span># Install the required packages</span><br>
+          pip install groq pyinstaller<br>
+          <span># Set GROQ_API_KEY in your environment, then run</span><br>
+          python app.py
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-content">
+      <span>© ARB Universal IDE · Open source under the MIT License</span>
+      <div class="footer-links">
+        <a class="text-link" href="https://github.com/aaravroybhattacharya-sketch/arb-universal-ide">GitHub</a>
+        <a class="text-link" href="https://opensource.org/license/mit">MIT License</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
