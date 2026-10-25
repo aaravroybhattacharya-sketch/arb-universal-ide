@@ -87,5 +87,5 @@ python app.py
 ```
 
 ## License
-Copyright (c) 2026 ARB Universal. All rights reserved. 
-This software and its source code are proprietary. You may view the source code for educational purposes, but you may not copy, modify, distribute, or use it for any commercial or non-commercial purpose without explicit written permission.
+
+© 2026 ARB Universal · Open source under the MIT License
