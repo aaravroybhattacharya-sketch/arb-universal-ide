@@ -88,4 +88,4 @@ python app.py
 
 ## License
 
-© 2026 ARB Universal · Open source under the MIT License
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
