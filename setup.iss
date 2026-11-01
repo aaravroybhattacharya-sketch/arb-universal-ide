@@ -22,8 +22,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; Point this exactly to your pyinstaller single executable build
-Source: "C:\Users\abc\Desktop\Aarav\ARB\dist\app.exe"; DestDir: "{app}"; Flags: ignoreversion
+; Tells GitHub to look for the application file inside the repository relative folder
+Source: "dist\app.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\ARB Compiler"; Filename: "{app}\app.exe"
