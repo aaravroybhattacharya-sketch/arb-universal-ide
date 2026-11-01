@@ -14,14 +14,31 @@ jobs:
     - name: Checkout Source Code
       uses: actions/checkout@v4
 
-    # Uses the verified and live Minionguyjpro action
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    # Installs the libraries listed in your script's imports
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller groq
+
+    # Compiles app.py into the dist/ folder inside the runner environment
+    - name: Build Executable with PyInstaller
+      run: |
+        pyinstaller --onefile --windowed app.py
+
+    # Compiles setup.iss using the newly generated dist/app.exe
     - name: Compile Inno Setup Script
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
         path: 'setup.iss'
 
-    - name: Upload Generated Artifact
+    # Saves the final installer so you can download it from GitHub Actions
+    - name: Upload Generated Installer Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: unsigned-installer
+        name: final-installer
         path: Output/*.exe
