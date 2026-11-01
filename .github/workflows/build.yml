@@ -14,10 +14,11 @@ jobs:
     - name: Checkout Source Code
       uses: actions/checkout@v4
 
+    # Uses the verified and live Minionguyjpro action
     - name: Compile Inno Setup Script
-      uses: robertdebock/inno-setup-action@v1
+      uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
-        filepath: 'setup.iss'
+        path: 'setup.iss'
 
     - name: Upload Generated Artifact
       uses: actions/upload-artifact@v4
