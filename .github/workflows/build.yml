@@ -1,0 +1,28 @@
+name: Automated Installer Build
+
+on:
+  push:
+    branches: [ main ] # Trigger a test build whenever you push to main
+  release:
+    types: [created]   # Trigger the production build when you make a GitHub release
+
+jobs:
+  compile-setup:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    # This automated step sets up Inno Setup in the cloud and builds your installer
+    - name: Compile Inno Setup Script
+      uses: amirmasoud/inno-setup-action@v1
+      with:
+        filepath: 'setup.iss' # Change this to the exact name of your Inno script file
+
+    # This uploads the generated setup file so it can be verified or signed
+    - name: Upload Generated Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: unsigned-installer
+        path: Output/*.exe  # Collects the installer from your Inno Output folder
