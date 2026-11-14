@@ -23,7 +23,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; Point this exactly to your pyinstaller single executable build
-SSource: "dist\app.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\app.exe"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{group}\ARB Compiler"; Filename: "{app}\app.exe"
 Name: "{autodesktop}\ARB Compiler"; Filename: "{app}\app.exe"; Tasks: desktopicon
