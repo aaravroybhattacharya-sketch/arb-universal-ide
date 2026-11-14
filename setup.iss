@@ -14,6 +14,7 @@ OutputBaseFilename=ARB_Compiler_Setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=arb_icon.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

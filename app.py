@@ -17,6 +17,8 @@ root = tk.Tk()
 root.title("ARB Multi-Language AI Compiler (Offline Embedded)")
 root.geometry("1100x650")
 root.configure(bg="#1e1e1e")
+if os.path.exists("arb_icon.ico"):
+    root.iconbitmap("arb_icon.ico")
 
 # --- Top Navigation Bar ---
 top_bar = tk.Frame(root, bg="#252526", height=50)
