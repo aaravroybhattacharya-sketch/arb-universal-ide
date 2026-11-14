@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://arb-universal-ide.vercel.app/sitemap.xml
