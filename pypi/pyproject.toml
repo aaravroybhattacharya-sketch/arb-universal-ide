@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arb-universal-ide"
+version = "2.0.0"
+description = "100% offline AI multi-language compiler IDE powered by embedded local Qwen 2.5 Coder."
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "Apache-2.0"}
+authors = [{name = "Aarav Roy Bhattacharya"}]
+dependencies = [
+    "llama-cpp-python",
+    "huggingface-hub"
+]
+
+[project.urls]
+Homepage = "https://arb-universal-ide.vercel.app"
+Repository = "https://github.com/aaravroybhattacharya-sketch/arb-universal-ide"
