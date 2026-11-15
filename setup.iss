@@ -9,7 +9,7 @@ DefaultDirName={autopf}\ARB Compiler
 DefaultGroupName=ARB Compiler
 AllowNoIcons=yes
 ; Where to save the final compiled Setup.exe installer wizard
-OutputDir=C:\Users\abc\Desktop\Aarav\ARB\installer_output
+OutputDir=C:\Users\abc\Desktop\ARB\installer_output
 OutputBaseFilename=ARB_Compiler_Setup
 Compression=lzma
 SolidCompression=yes
