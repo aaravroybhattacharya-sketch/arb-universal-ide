@@ -1,25 +1,46 @@
 # ARB Universal IDE & AI Compiler
 
 <p align="center">
-  Turn plain-English instructions into multi-language code 100% locally and offline using the embedded Qwen 2.5 Coder 7B model [https://shields.io].
+  Turn plain-English instructions into code in the language you choose — 100% locally and offline.
 </p>
 
-## Overview
-**ARB** is an offline, AI-powered transpiler IDE that converts everyday English descriptions into executable code across languages like Python, C, Java, JavaScript, and more. It embeds `llama-cpp-python` with the Qwen 2.5 Coder 7B model (~4.7 GB) directly, requiring no API keys, cloud accounts, or external servers.
+<p align="center">
+  <img src="https://shields.io" alt="AI Engine: Qwen 2.5 Coder 7B">
+  <img src="https://shields.io" alt="Platforms: Windows, macOS, and Linux">
+  <a href="https://pypi.org">
+    <img src="https://shields.io" alt="PyPI Version">
+  </a>
+  <a href="https://github.com">
+    <img src="https://shields.io" alt="Apache License 2.0">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com">
+    <img src="https://shields.io" alt="Download Windows Installer">
+  </a>
+</p>
+
+---
+
+## What is ARB?
+
+**ARB** is an offline, AI-powered, multi-language transpiler IDE that converts plain English instructions into executable code locally. It includes an automated dependency management pipeline and embeds `llama-cpp-python` with **Qwen 2.5 Coder 7B** (~4.7 GB model downloaded automatically on first run) with zero API keys or cloud requirements.
 
 ## Key Features
-- **Offline & Private:** Zero rate limits, subscriptions, or cloud dependencies.
-- **Automated Pipeline:** Handles code generation, dependency identification/installation, and native file export (`.py`, `.c`, `.js`, etc.).
-- **Plain English Input:** Write logic without strict indentations.
 
-## Quick Install
+- **100% Offline & Unlimited:** Runs locally with zero rate limits or subscriptions.
+- **Zero-Config Embedded AI:** Automatically caches the coding model on first launch.
+- **Flexible Input & Output:** Write logic in plain language to generate Python, C, Java, JavaScript, HTML/CSS, C++, or Go, with automated dependency installation and native file exports.
 
-Via PyPI:
+## Quick Install & Usage
+
+Install directly via PyPI:
 ```bash
 pip install arb-universal-ide
 ```
 
-From Source (Windows, macOS, or Linux with Python 3.9+ and 8GB+ RAM):
+Or build/run from source (requires Python 3.9+, 8+ GB RAM, and ~5 GB free space):
 ```bash
 git clone https://github.com
 cd arb-universal-ide
@@ -28,4 +49,5 @@ python app.py
 ```
 
 ## License
-Licensed under the Apache License 2.0. See the repository for full details.
+
+Licensed under the Apache License 2.0. See the repository's `LICENSE.md` for full details.
