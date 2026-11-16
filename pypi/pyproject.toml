@@ -28,9 +28,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://vercel.app"
-Repository = "https://github.com"
-Issues = "https://github.com/issues"
+Homepage = "https://arb-universal-ide.vercel.app"
+Repository = "https://github.com/aaravroybhattacharya-sketch/arb-universal-ide"
+Issues = "https://github.com/aaravroybhattacharya-sketch/arb-universal-ide/issues"
 
 [tool.setuptools]
 py-modules = ["app"]
