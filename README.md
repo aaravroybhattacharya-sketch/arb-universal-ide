@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://shields.io" alt="AI Engine: Qwen 2.5 Coder 7B">
   <img src="https://shields.io" alt="Platforms: Windows, macOS, and Linux">
-  <a href="https://pypi.org">
+  <a href="https://pypi.org/project/arb-universal-ide/2.0.0/#description">
     <img src="https://shields.io" alt="PyPI Version">
   </a>
   <a href="https://github.com">
