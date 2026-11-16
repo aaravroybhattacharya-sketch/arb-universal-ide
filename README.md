@@ -7,6 +7,9 @@
 <p align="center">
   <img src="https://shields.io" alt="AI Engine: Local Offline Qwen 2.5 Coder">
   <img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20macOS%20%7C%20Linux-4C8EDA?style=for-the-badge" alt="Platforms: Windows, macOS, and Linux source setup">
+  <a href="https://pypi.org">
+    <img src="https://shields.io" alt="PyPI Version">
+  </a>
   <a href="https://github.com/aaravroybhattacharya-sketch/arb-universal-ide/blob/main/LICENSE.md">
     <img src="https://shields.io" alt="Apache License 2.0">
   </a>
@@ -52,6 +55,14 @@ numbers = list(range(1, 6))
 for num in numbers:
     if num % 2 == 0:
         print(f"Even: {num}")
+```
+
+## Quick Install (via PyPI)
+
+You can install the package directly from PyPI on Windows, macOS, or Linux:
+
+```bash
+pip install arb-universal-ide
 ```
 
 ## Build from source
