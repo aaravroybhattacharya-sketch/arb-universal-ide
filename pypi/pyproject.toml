@@ -4,10 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arb-universal-ide"
-version = "2.0.3"
+version = "2.0.4"
 description = "100% offline AI multi-language compiler IDE powered by embedded local Qwen 2.5 Coder 7B."
 readme = "README.md"
-license = "Apache-2.0"
 requires-python = ">=3.9"
 authors = [
     { name = "Aarav Roy Bhattacharya" }
@@ -16,6 +15,7 @@ keywords = ["ai", "ide", "compiler", "offline-ai", "local-llm", "qwen", "llama-c
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Topic :: Software Development :: Compilers",
