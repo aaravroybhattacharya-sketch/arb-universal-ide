@@ -1,13 +1,13 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "arb-universal-ide"
 version = "2.0.1"
 description = "100% offline AI multi-language compiler IDE powered by embedded local Qwen 2.5 Coder 7B."
-readme = { file = "README.md", content-type = "text/markdown" }
-license = { file = "LICENSE.md" }
+readme = "README.md"
+license = { text = "Apache-2.0" }
 requires-python = ">=3.9"
 authors = [
     { name = "Aarav Roy Bhattacharya" }
@@ -19,10 +19,6 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Compilers",
     "Topic :: Software Development :: Integrated Development Environments (IDE)",
 ]
@@ -35,3 +31,6 @@ dependencies = [
 Homepage = "https://vercel.app"
 Repository = "https://github.com"
 Issues = "https://github.com/issues"
+
+[tool.setuptools]
+py-modules = ["app"]
