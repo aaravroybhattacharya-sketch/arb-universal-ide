@@ -1,10 +1,10 @@
 name: Build and Replace v1.0.1 Release
 
 on:
-  workflow_dispatch: # Allows manual one-click run from the GitHub Actions tab
+  workflow_dispatch:
 
 permissions:
-  contents: write # Required to edit existing GitHub releases
+  contents: write
 
 jobs:
   build-and-release:
@@ -19,12 +19,22 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies and build app.exe
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller
-          if (Test-Path requirements.txt) { pip install -r requirements.txt }
-          pyinstaller --onefile --windowed app.py
+          pip install pyinstaller huggingface_hub
+          pip install llama-cpp-python --extra-index-url https://github.io
+          python -c "import llama_cpp; print('llama_cpp verified!')"
+
+      - name: Build dist\app.exe with PyInstaller
+        run: |
+          pyinstaller --noconfirm --onefile --windowed `
+            --icon="icon\arb_icon.ico" `
+            --add-data "icon\arb_icon.ico;." `
+            --hidden-import=llama_cpp `
+            --collect-all llama_cpp `
+            --collect-all huggingface_hub `
+            app.py
 
       - name: Compile setup.iss with Inno Setup
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
@@ -35,5 +45,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.1
-          files: installer_output/ARB_Universal_IDE_Setup.exe
+          files: installer_output/ARB_Universal_IDE.exe
           overwrite_files: true
