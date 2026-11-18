@@ -1,0 +1,39 @@
+name: Build and Replace v1.0.1 Release
+
+on:
+  workflow_dispatch: # Allows manual one-click run from the GitHub Actions tab
+
+permissions:
+  contents: write # Required to edit existing GitHub releases
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies and build app.exe
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+          pyinstaller --onefile --windowed app.py
+
+      - name: Compile setup.iss with Inno Setup
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
+        with:
+          path: setup.iss
+
+      - name: Overwrite EXE in v1.0.1 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.1
+          files: installer_output/ARB_Universal_IDE_Setup.exe
+          overwrite_files: true
