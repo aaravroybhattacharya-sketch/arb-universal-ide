@@ -1,21 +1,22 @@
 [Setup]
 AppName=ARB Universal IDE
-AppVersion=1.0
+AppVersion=1.0.1
 DefaultDirName={autopf}\ARB Universal IDE
 DefaultGroupName=ARB Universal IDE
-OutputDir=installer
-OutputBaseFilename=ARB-Universal-IDE-Setup
+OutputDir=installer_output
+OutputBaseFilename=ARB_Universal_IDE
+SetupIconFile=icon\arb_icon.ico
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 Compression=lzma
 SolidCompression=yes
 
 [Files]
-Source: "dist\ARB Universal IDE\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\ARB Universal IDE"; Filename: "{app}\ARB Universal IDE.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\ARB Universal IDE"; Filename: "{app}\ARB Universal IDE.exe"; WorkingDir: "{app}"
+Name: "{group}\ARB Universal IDE"; Filename: "{app}\app.exe"; WorkingDir: "{app}"
+Name: "{autodesktop}\ARB Universal IDE"; Filename: "{app}\app.exe"; WorkingDir: "{app}"
 
 [Run]
-Filename: "{app}\ARB Universal IDE.exe"; Description: "Launch ARB Universal IDE"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\app.exe"; Description: "Launch ARB Universal IDE"; Flags: nowait postinstall skipifsilent
