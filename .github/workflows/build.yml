@@ -1,44 +1,40 @@
-name: Automated Installer Build
+name: Build Windows Installer
 
 on:
   push:
-    branches: [ main ]
-  release:
-    types: [created]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  compile-setup:
+  build-windows:
     runs-on: windows-latest
-    
     steps:
-    - name: Checkout Source Code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-    # Installs the libraries listed in your script's imports
-    - name: Install Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pyinstaller groq
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install llama-cpp-python huggingface-hub pyinstaller
 
-    # Compiles app.py into the dist/ folder inside the runner environment
-    - name: Build Executable with PyInstaller
-      run: |
-        pyinstaller --onefile --windowed app.py
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --noconfirm --onedir --windowed --name "ARB Universal IDE" app.py
 
-    # Compiles setup.iss using the newly generated dist/app.exe
-    - name: Compile Inno Setup Script
-      uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
-      with:
-        path: 'setup.iss'
+      - name: Build Installer with Inno Setup
+        run: |
+          iscc setup.iss
 
-    # Saves the final installer so you can download it from GitHub Actions
-    - name: Upload Generated Installer Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: final-installer
-        path: Output/*.exe
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: installer/ARB-Universal-IDE-Setup.exe
