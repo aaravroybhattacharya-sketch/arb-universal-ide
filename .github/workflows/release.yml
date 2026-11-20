@@ -26,9 +26,9 @@ jobs:
           pip install llama-cpp-python --extra-index-url https://github.io
           python -c "import llama_cpp; print('llama_cpp verified!')"
 
-      - name: Build dist\app.exe with PyInstaller
+      - name: Build dist\app with PyInstaller
         run: |
-          pyinstaller --noconfirm --onefile --windowed `
+          pyinstaller --noconfirm --onedir --windowed `
             --icon="icon\arb_icon.ico" `
             --add-data "icon\arb_icon.ico;." `
             --hidden-import=llama_cpp `
