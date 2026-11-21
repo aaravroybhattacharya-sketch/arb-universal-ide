@@ -10,6 +10,9 @@ from tkinter import messagebox, ttk
 from llama_cpp import Llama
 from huggingface_hub import hf_hub_download
 
+if os.name == "nt":
+    import winreg
+
 # Global model cache & lock to prevent duplicate loads
 llm_engine = None
 model_lock = threading.Lock()
@@ -53,7 +56,16 @@ lang_dropdown = ttk.Combobox(
     width=15,
     font=("Segoe UI", 10)
 )
-lang_dropdown["values"] = ("Python", "C", "C++", "Java", "JavaScript", "Go", "HTML & CSS")
+lang_dropdown["values"] = (
+    "Python",
+    "C",
+    "C++",
+    "C#",
+    "Java",
+    "JavaScript",
+    "TypeScript",
+    "HTML & CSS"
+)
 lang_dropdown.pack(side=tk.LEFT, padx=5)
 
 # --- Main Split Window Layout ---
@@ -132,16 +144,105 @@ def reset_ui_state(show_popup=None):
     root.after(0, _reset)
 
 
-# --- Toolchain / PATH Verification ---
+# --- Toolchain / PATH Verification & Auto-Installer ---
+def refresh_windows_path():
+    """Reloads the Windows System and User PATH from the Registry into the current Python process."""
+    if os.name != "nt":
+        return
+
+    paths = []
+    registry_locations = [
+        (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"),
+        (winreg.HKEY_CURRENT_USER, r"Environment"),
+    ]
+
+    for root_key, sub_key in registry_locations:
+        try:
+            with winreg.OpenKey(root_key, sub_key) as key:
+                val, _ = winreg.QueryValueEx(key, "Path")
+                if val:
+                    expanded = os.path.expandvars(val)
+                    paths.extend(expanded.split(";"))
+        except FileNotFoundError:
+            continue
+
+    current_paths = os.environ.get("PATH", "").split(";")
+    merged = []
+    for p in paths + current_paths:
+        p = p.strip()
+        if p and p not in merged:
+            merged.append(p)
+    os.environ["PATH"] = ";".join(merged)
+
+
+def install_missing_toolchains(missing_items):
+    """Installs missing compilers/runtimes via winget in a background thread."""
+    def _worker():
+        root.after(0, lambda: run_button.config(state=tk.DISABLED, text="📦 Installing Toolchains..."))
+        update_terminal("\n🛠️ Starting automated toolchain installation via winget...\n")
+
+        installed_ids = set()
+
+        for name, cmd, winget_id in missing_items:
+            if winget_id in installed_ids:
+                update_terminal(f"ℹ️ {name} is covered by already-installed package ({winget_id}).\n")
+                continue
+
+            update_terminal(f"\n📥 Installing {name} ({winget_id})... Please wait (may take 1-3 minutes)...\n")
+            try:
+                proc = subprocess.run(
+                    [
+                        "winget", "install",
+                        "--id", winget_id,
+                        "-e", "--silent",
+                        "--accept-package-agreements",
+                        "--accept-source-agreements"
+                    ],
+                    capture_output=True,
+                    text=True
+                )
+                if proc.returncode == 0:
+                    update_terminal(f"✅ Successfully installed {name}!\n")
+                    installed_ids.add(winget_id)
+                else:
+                    update_terminal(f"⚠️ winget returned code {proc.returncode} for {name}:\n{proc.stderr or proc.stdout}\n")
+            except Exception as e:
+                update_terminal(f"❌ Failed to install {name}: {e}\n")
+
+        update_terminal("\n🔄 Refreshing system PATH environment variables...\n")
+        refresh_windows_path()
+
+        update_terminal("\n🔎 Re-checking System Toolchain PATH Diagnostics:\n")
+        tools = [
+            ("Python", sys.executable),
+            ("GCC (C)", "gcc"),
+            ("G++ (C++)", "g++"),
+            (".NET SDK (C#)", "dotnet"),
+            ("JDK (Java)", "javac"),
+            ("Node.js (JS/TS)", "node"),
+        ]
+        for label, binary in tools:
+            found = shutil.which(binary)
+            status = f"✅ {label}: Found ({found})" if found else f"⚠️ {label}: Still not found (try restarting the IDE)"
+            update_terminal(f"  {status}\n")
+
+        update_terminal("\n✅ Setup check complete!\n")
+        reset_ui_state()
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
 def check_toolchain_availability(target_lang):
     """Verifies that the required compiler or runtime exists in the system PATH."""
+    refresh_windows_path()
     requirements = {
         "Python": [(sys.executable, "Python interpreter")],
         "C": [("gcc", "GCC / MinGW C Compiler")],
         "C++": [("g++", "G++ / MinGW C++ Compiler")],
+        "C#": [("dotnet", ".NET SDK (dotnet)")],
         "Java": [("javac", "Java JDK Compiler (javac)"), ("java", "Java Runtime (java)")],
         "JavaScript": [("node", "Node.js Runtime")],
-        "Go": [("go", "Go Compiler & Runtime")],
+        "TypeScript": [("node", "Node.js Runtime"), ("npx", "NPX Package Runner")],
         "HTML & CSS": []
     }
 
@@ -154,30 +255,55 @@ def check_toolchain_availability(target_lang):
         return False, (
             f"❌ Missing System Toolchain for {target_lang}:\n"
             + "\n".join(missing)
-            + "\n\nPlease install the missing toolchain and ensure its bin directory is added to your system PATH."
+            + "\n\nPlease install the missing toolchain or restart the IDE to refresh PATH."
         )
     return True, ""
 
 
 def check_all_toolchains_on_startup():
-    """Displays a quick diagnostic summary of detected compilers/runtimes on launch."""
-    tools = {
-        "Python": sys.executable,
-        "GCC (C)": "gcc",
-        "G++ (C++)": "g++",
-        "JDK (Java)": "javac",
-        "Node.js (JS)": "node",
-        "Go": "go"
-    }
+    """Checks all compilers on launch and offers to auto-install missing ones."""
+    refresh_windows_path()
+
+    # Format: (Display Name, Executable Name, Winget Package ID)
+    tools = [
+        ("Python", sys.executable, "Python.Python.3.12"),
+        ("GCC (C)", "gcc", "BrechtSanders.WinLibs.POSIX.UCRT"),
+        ("G++ (C++)", "g++", "BrechtSanders.WinLibs.POSIX.UCRT"),
+        (".NET SDK (C#)", "dotnet", "Microsoft.DotNet.SDK.8"),
+        ("JDK (Java)", "javac", "EclipseAdoptium.Temurin.21.JDK"),
+        ("Node.js (JS/TS)", "node", "OpenJS.NodeJS.LTS"),
+    ]
+
     status_lines = ["🔎 System Toolchain PATH Diagnostics:\n"]
-    for name, cmd in tools.items():
+    missing_tools = []
+
+    for name, cmd, winget_id in tools:
         path = shutil.which(cmd)
         if path:
             status_lines.append(f"  ✅ {name}: Found ({path})\n")
         else:
             status_lines.append(f"  ⚠️ {name}: Not found in PATH\n")
-    status_lines.append("\nReady. Select a language and click 'Compile & Execute Logic'.\n")
+            missing_tools.append((name, cmd, winget_id))
+
     update_terminal("".join(status_lines))
+
+    if missing_tools:
+        if os.name != "nt" or not shutil.which("winget"):
+            update_terminal("\n⚠️ 'winget' is not available on this system. Please install missing tools manually.\n")
+            return
+
+        missing_names = ", ".join(item[0] for item in missing_tools)
+        ask = messagebox.askyesno(
+            "Missing Compilers & Runtimes",
+            f"The following toolchains are missing from your PATH:\n\n{missing_names}\n\n"
+            "Would you like ARB IDE to automatically download and install all of them now using winget?"
+        )
+        if ask:
+            install_missing_toolchains(missing_tools)
+        else:
+            update_terminal("\n⏭️ Skipped automatic installation. Only installed languages can be executed.\n")
+    else:
+        update_terminal("\n🎉 All toolchains are installed and ready!\n")
 
 
 # --- Core Embedded AI & Execution Pipeline ---
@@ -212,7 +338,6 @@ def auto_install_dependencies(compiled_code):
     })
     packages_to_check = set(imports) - stdlib
 
-    # Common import-name to PyPI-package mappings
     pypi_alias = {
         "cv2": "opencv-python",
         "PIL": "Pillow",
@@ -241,7 +366,7 @@ def auto_install_dependencies(compiled_code):
 def execute_compiled_artifact(target_lang, source_file, compiled_source):
     """Compiles and executes the generated source file in an isolated subprocess."""
     exe_suffix = ".exe" if os.name == "nt" else ""
-    timeout_sec = 15
+    timeout_sec = 25
 
     try:
         if target_lang == "Python":
@@ -285,6 +410,25 @@ def execute_compiled_artifact(target_lang, source_file, compiled_source):
             )
             return res.stdout, res.stderr, res.returncode
 
+        elif target_lang == "C#":
+            cs_proj_dir = os.path.abspath("arb_cs_proj")
+            if not os.path.exists(cs_proj_dir):
+                update_terminal("🏗️ Initializing .NET C# console workspace...\n")
+                init_res = subprocess.run(
+                    ["dotnet", "new", "console", "-o", cs_proj_dir, "--force"],
+                    capture_output=True, text=True, timeout=timeout_sec
+                )
+                if init_res.returncode != 0:
+                    return "", f".NET Project Init Error:\n{init_res.stderr}", init_res.returncode
+
+            shutil.copyfile(source_file, os.path.join(cs_proj_dir, "Program.cs"))
+            update_terminal("🔨 Building & running C# project with dotnet...\n")
+            res = subprocess.run(
+                ["dotnet", "run", "--project", cs_proj_dir],
+                capture_output=True, text=True, timeout=timeout_sec
+            )
+            return res.stdout, res.stderr, res.returncode
+
         elif target_lang == "Java":
             class_name = os.path.splitext(source_file)[0]
             update_terminal(f"🔨 Compiling {source_file} with javac...\n")
@@ -309,10 +453,11 @@ def execute_compiled_artifact(target_lang, source_file, compiled_source):
             )
             return res.stdout, res.stderr, res.returncode
 
-        elif target_lang == "Go":
-            update_terminal(f"🚀 Running {source_file} with Go...\n")
+        elif target_lang == "TypeScript":
+            update_terminal(f"🚀 Transpiling & executing {source_file} with tsx...\n")
+            npx_cmd = "npx.cmd" if os.name == "nt" else "npx"
             res = subprocess.run(
-                ["go", "run", source_file],
+                [npx_cmd, "-y", "tsx", source_file],
                 capture_output=True, text=True, timeout=timeout_sec
             )
             return res.stdout, res.stderr, res.returncode
@@ -342,10 +487,10 @@ def background_compiler_worker(english_code, target_lang):
         system_prompt = (
             f"You are a strict code compiler. Translate the user's plain English programming logic "
             f"into complete, runnable, syntactically correct {target_lang} source code. Rules:\n"
-            f"1. Conform strictly to {target_lang} syntax and include all necessary imports/headers and main entry points.\n"
+            f"1. Conform strictly to {target_lang} syntax and include all necessary imports/using/headers and main entry points.\n"
             f"2. Output ONLY raw executable {target_lang} code.\n"
             f"3. Do NOT include markdown code fences (```), explanations, or notes.\n"
-            f"4. Do NOT include blocking interactive input calls (like input(), scanf(), cin, Scanner) so automated execution completes cleanly."
+            f"4. Do NOT include blocking interactive input calls (like input(), scanf(), cin, Console.ReadLine(), Scanner) so automated execution completes cleanly."
         )
 
         response = llm.create_chat_completion(
@@ -372,9 +517,10 @@ def background_compiler_worker(english_code, target_lang):
             "Python": ".py",
             "C": ".c",
             "C++": ".cpp",
+            "C#": ".cs",
             "Java": ".java",
             "JavaScript": ".js",
-            "Go": ".go",
+            "TypeScript": ".ts",
             "HTML & CSS": ".html"
         }
 
@@ -456,7 +602,7 @@ run_button = tk.Button(
 )
 run_button.pack()
 
-# Run initial PATH diagnostic check on launch
+# Run initial PATH diagnostic check & auto-installer prompt on launch
 check_all_toolchains_on_startup()
 
 root.mainloop()
