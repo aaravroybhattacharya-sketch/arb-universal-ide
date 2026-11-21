@@ -1,4 +1,4 @@
-name: Build and Replace v1.0.1 Release
+name: Build and Replace v1.2.0 Release
 
 on:
   workflow_dispatch:
@@ -41,9 +41,9 @@ jobs:
         with:
           path: setup.iss
 
-      - name: Overwrite EXE in v1.0.1 Release
+      - name: Overwrite EXE in v1.2.0 Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.1
+          tag_name: v1.2.0
           files: installer_output/ARB_Universal_IDE.exe
           overwrite_files: true
