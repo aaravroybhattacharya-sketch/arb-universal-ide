@@ -1,22 +1,25 @@
 import sys
 import os
+import re
+import shutil
 import subprocess
+import threading
+import webbrowser
 import tkinter as tk
 from tkinter import messagebox, ttk
-import io
-from contextlib import redirect_stdout
-import threading
 from llama_cpp import Llama
 from huggingface_hub import hf_hub_download
 
-# Global variable to cache the loaded model in RAM so it only loads once
+# Global model cache & lock to prevent duplicate loads
 llm_engine = None
+model_lock = threading.Lock()
 
-# Initialize UI Window
+# --- Initialize UI Window ---
 root = tk.Tk()
 root.title("ARB Multi-Language AI Compiler (Offline Embedded)")
-root.geometry("1100x650")
+root.geometry("1150x680")
 root.configure(bg="#1e1e1e")
+
 if os.path.exists("arb_icon.ico"):
     root.iconbitmap("arb_icon.ico")
 
@@ -24,15 +27,33 @@ if os.path.exists("arb_icon.ico"):
 top_bar = tk.Frame(root, bg="#252526", height=50)
 top_bar.pack(fill=tk.X, side=tk.TOP)
 
-title_label = tk.Label(top_bar, text="📝 ARB AI Universal IDE (Local)", font=("Segoe UI", 12, "bold"), fg="#ffffff", bg="#252526")
+title_label = tk.Label(
+    top_bar,
+    text="📝 ARB AI Universal IDE (Local)",
+    font=("Segoe UI", 12, "bold"),
+    fg="#ffffff",
+    bg="#252526"
+)
 title_label.pack(side=tk.LEFT, padx=20, pady=10)
 
-lang_label = tk.Label(top_bar, text="Target Language:", fg="#aaaaaa", bg="#252526", font=("Segoe UI", 10))
+lang_label = tk.Label(
+    top_bar,
+    text="Target Language:",
+    fg="#aaaaaa",
+    bg="#252526",
+    font=("Segoe UI", 10)
+)
 lang_label.pack(side=tk.LEFT, padx=(20, 5))
 
 language_var = tk.StringVar(value="Python")
-lang_dropdown = ttk.Combobox(top_bar, textvariable=language_var, state="readonly", width=15, font=("Segoe UI", 10))
-lang_dropdown['values'] = ("Python", "C", "Java", "JavaScript", "HTML & CSS", "C++", "Go")
+lang_dropdown = ttk.Combobox(
+    top_bar,
+    textvariable=language_var,
+    state="readonly",
+    width=15,
+    font=("Segoe UI", 10)
+)
+lang_dropdown["values"] = ("Python", "C", "C++", "Java", "JavaScript", "Go", "HTML & CSS")
 lang_dropdown.pack(side=tk.LEFT, padx=5)
 
 # --- Main Split Window Layout ---
@@ -43,164 +64,399 @@ main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
 editor_frame = tk.Frame(main_frame, bg="#1e1e1e")
 editor_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
 
-editor_label = tk.Label(editor_frame, text="Write Plain English Logic Here:", fg="#aaaaaa", bg="#1e1e1e", font=("Segoe UI", 10))
+editor_label = tk.Label(
+    editor_frame,
+    text="Write Plain English Logic Here:",
+    fg="#aaaaaa",
+    bg="#1e1e1e",
+    font=("Segoe UI", 10)
+)
 editor_label.pack(anchor=tk.W, pady=(0, 5))
 
-code_input = tk.Text(editor_frame, wrap=tk.WORD, undo=True, font=("Consolas", 12), bg="#2d2d2d", fg="#ffffff", insertbackground="white")
+code_input = tk.Text(
+    editor_frame,
+    wrap=tk.WORD,
+    undo=True,
+    font=("Consolas", 12),
+    bg="#2d2d2d",
+    fg="#ffffff",
+    insertbackground="white"
+)
 code_input.pack(fill=tk.BOTH, expand=True)
 
 # RIGHT SIDE: Output Screen Terminal Panel
 output_frame = tk.Frame(main_frame, bg="#1e1e1e")
 output_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=5)
 
-output_label = tk.Label(output_frame, text="AI Compiler & Execution Log Output:", fg="#aaaaaa", bg="#1e1e1e", font=("Segoe UI", 10))
+output_label = tk.Label(
+    output_frame,
+    text="AI Compiler & Execution Log Output:",
+    fg="#aaaaaa",
+    bg="#1e1e1e",
+    font=("Segoe UI", 10)
+)
 output_label.pack(anchor=tk.W, pady=(0, 5))
 
-terminal_output = tk.Text(output_frame, wrap=tk.WORD, font=("Consolas", 11), bg="#121212", fg="#00ff00", state=tk.DISABLED)
+terminal_output = tk.Text(
+    output_frame,
+    wrap=tk.WORD,
+    font=("Consolas", 11),
+    bg="#121212",
+    fg="#00ff00",
+    state=tk.DISABLED
+)
 terminal_output.pack(fill=tk.BOTH, expand=True)
 
-# --- Core Dynamic Functionality ---
-def update_terminal(text):
-    """Safely updates the custom terminal UI from any background worker thread."""
-    terminal_output.config(state=tk.NORMAL)
-    terminal_output.insert(tk.END, text)
-    terminal_output.see(tk.END)
-    terminal_output.config(state=tk.DISABLED)
 
+# --- Thread-Safe UI Helpers ---
+def update_terminal(text):
+    """Safely updates the custom terminal UI on the main Tkinter thread."""
+    def _append():
+        terminal_output.config(state=tk.NORMAL)
+        terminal_output.insert(tk.END, text)
+        terminal_output.see(tk.END)
+        terminal_output.config(state=tk.DISABLED)
+    root.after(0, _append)
+
+
+def reset_ui_state(show_popup=None):
+    """Safely re-enables the Run button and optionally displays a popup on the main thread."""
+    def _reset():
+        run_button.config(state=tk.NORMAL, text="⚡ Compile & Execute Logic")
+        if show_popup:
+            title, msg, is_error = show_popup
+            if is_error:
+                messagebox.showerror(title, msg)
+            else:
+                messagebox.showinfo(title, msg)
+    root.after(0, _reset)
+
+
+# --- Toolchain / PATH Verification ---
+def check_toolchain_availability(target_lang):
+    """Verifies that the required compiler or runtime exists in the system PATH."""
+    requirements = {
+        "Python": [(sys.executable, "Python interpreter")],
+        "C": [("gcc", "GCC / MinGW C Compiler")],
+        "C++": [("g++", "G++ / MinGW C++ Compiler")],
+        "Java": [("javac", "Java JDK Compiler (javac)"), ("java", "Java Runtime (java)")],
+        "JavaScript": [("node", "Node.js Runtime")],
+        "Go": [("go", "Go Compiler & Runtime")],
+        "HTML & CSS": []
+    }
+
+    missing = []
+    for binary, label in requirements.get(target_lang, []):
+        if not shutil.which(binary):
+            missing.append(f"• {label} ('{binary}' not found in PATH)")
+
+    if missing:
+        return False, (
+            f"❌ Missing System Toolchain for {target_lang}:\n"
+            + "\n".join(missing)
+            + "\n\nPlease install the missing toolchain and ensure its bin directory is added to your system PATH."
+        )
+    return True, ""
+
+
+def check_all_toolchains_on_startup():
+    """Displays a quick diagnostic summary of detected compilers/runtimes on launch."""
+    tools = {
+        "Python": sys.executable,
+        "GCC (C)": "gcc",
+        "G++ (C++)": "g++",
+        "JDK (Java)": "javac",
+        "Node.js (JS)": "node",
+        "Go": "go"
+    }
+    status_lines = ["🔎 System Toolchain PATH Diagnostics:\n"]
+    for name, cmd in tools.items():
+        path = shutil.which(cmd)
+        if path:
+            status_lines.append(f"  ✅ {name}: Found ({path})\n")
+        else:
+            status_lines.append(f"  ⚠️ {name}: Not found in PATH\n")
+    status_lines.append("\nReady. Select a language and click 'Compile & Execute Logic'.\n")
+    update_terminal("".join(status_lines))
+
+
+# --- Core Embedded AI & Execution Pipeline ---
 def get_embedded_model():
-    """Automatically downloads (first run only) and loads the local GGUF model into RAM."""
+    """Thread-safe lazy loader for the local GGUF model."""
     global llm_engine
-    if llm_engine is None:
-        update_terminal("📥 Checking/Downloading local Qwen 2.5 Coder model (first run takes a few minutes)...\n")
-        model_path = hf_hub_download(
-            repo_id="Qwen/Qwen2.5-Coder-7B-Instruct-GGUF",
-            filename="qwen2.5-coder-7b-instruct-q4_k_m.gguf"
-        )
-        update_terminal("🧠 Loading AI model directly into system memory...\n")
-        # n_gpu_layers=-1 uses GPU if available, otherwise falls back cleanly to CPU
-        llm_engine = Llama(
-            model_path=model_path,
-            n_ctx=4096,
-            n_gpu_layers=-1,
-            verbose=False
-        )
+    with model_lock:
+        if llm_engine is None:
+            update_terminal("📥 Checking/Downloading local Qwen 2.5 Coder model (~4.7 GB on first run)...\n")
+            model_path = hf_hub_download(
+                repo_id="Qwen/Qwen2.5-Coder-7B-Instruct-GGUF",
+                filename="qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+            )
+            update_terminal("🧠 Loading AI model directly into system memory...\n")
+            llm_engine = Llama(
+                model_path=model_path,
+                n_ctx=4096,
+                n_gpu_layers=-1,
+                verbose=False
+            )
     return llm_engine
 
+
 def auto_install_dependencies(compiled_code):
-    """Scans code logic structures and launches automated background pip module installations."""
-    update_terminal("🔍 Analyzing code structure for required third-party packages...\n")
-    import re
+    """Scans Python code for third-party imports and installs missing packages."""
+    update_terminal("🔍 Analyzing Python imports for third-party dependencies...\n")
     imports = re.findall(r'^\s*(?:import|from)\s+([a-zA-Z0-9_]+)', compiled_code, re.MULTILINE)
-    
-    standard_libs = {'sys', 'os', 'math', 'random', 'time', 'json', 're', 'datetime', 'collections', 'itertools', 'io'}
-    packages_to_check = set(imports) - standard_libs
+
+    stdlib = getattr(sys, "stdlib_module_names", {
+        'sys', 'os', 'math', 'random', 'time', 'json', 're', 'datetime',
+        'collections', 'itertools', 'io', 'pathlib', 'subprocess', 'threading'
+    })
+    packages_to_check = set(imports) - stdlib
+
+    # Common import-name to PyPI-package mappings
+    pypi_alias = {
+        "cv2": "opencv-python",
+        "PIL": "Pillow",
+        "sklearn": "scikit-learn",
+        "yaml": "PyYAML",
+        "bs4": "beautifulsoup4"
+    }
 
     for package in packages_to_check:
         try:
             __import__(package)
         except ImportError:
-            update_terminal(f"📦 Missing package '{package}' discovered. Running pip deployment module...\n")
+            pip_name = pypi_alias.get(package, package)
+            update_terminal(f"📦 Missing package '{package}'. Installing '{pip_name}' via pip...\n")
             try:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", package], 
-                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                update_terminal(f"✅ Successfully installed requirement: {package}\n")
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", pip_name],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                update_terminal(f"✅ Successfully installed: {pip_name}\n")
             except Exception as pip_err:
-                update_terminal(f"⚠️ Automatic module install skipped or failed for '{package}': {pip_err}\n")
+                update_terminal(f"⚠️ Automatic install failed for '{pip_name}': {pip_err}\n")
+
+
+def execute_compiled_artifact(target_lang, source_file, compiled_source):
+    """Compiles and executes the generated source file in an isolated subprocess."""
+    exe_suffix = ".exe" if os.name == "nt" else ""
+    timeout_sec = 15
+
+    try:
+        if target_lang == "Python":
+            auto_install_dependencies(compiled_source)
+            update_terminal("🚀 Running Python script in isolated subprocess...\n")
+            res = subprocess.run(
+                [sys.executable, source_file],
+                capture_output=True, text=True, timeout=timeout_sec
+            )
+            return res.stdout, res.stderr, res.returncode
+
+        elif target_lang == "C":
+            bin_file = f"output_c{exe_suffix}"
+            update_terminal(f"🔨 Compiling {source_file} with gcc...\n")
+            comp = subprocess.run(
+                ["gcc", source_file, "-o", bin_file],
+                capture_output=True, text=True, timeout=timeout_sec
+            )
+            if comp.returncode != 0:
+                return "", f"GCC Compilation Error:\n{comp.stderr}", comp.returncode
+            update_terminal(f"🚀 Executing ./{bin_file}...\n")
+            res = subprocess.run(
+                [os.path.abspath(bin_file)],
+                capture_output=True, text=True, timeout=timeout_sec
+            )
+            return res.stdout, res.stderr, res.returncode
+
+        elif target_lang == "C++":
+            bin_file = f"output_cpp{exe_suffix}"
+            update_terminal(f"🔨 Compiling {source_file} with g++...\n")
+            comp = subprocess.run(
+                ["g++", source_file, "-o", bin_file],
+                capture_output=True, text=True, timeout=timeout_sec
+            )
+            if comp.returncode != 0:
+                return "", f"G++ Compilation Error:\n{comp.stderr}", comp.returncode
+            update_terminal(f"🚀 Executing ./{bin_file}...\n")
+            res = subprocess.run(
+                [os.path.abspath(bin_file)],
+                capture_output=True, text=True, timeout=timeout_sec
+            )
+            return res.stdout, res.stderr, res.returncode
+
+        elif target_lang == "Java":
+            class_name = os.path.splitext(source_file)[0]
+            update_terminal(f"🔨 Compiling {source_file} with javac...\n")
+            comp = subprocess.run(
+                ["javac", source_file],
+                capture_output=True, text=True, timeout=timeout_sec
+            )
+            if comp.returncode != 0:
+                return "", f"Javac Compilation Error:\n{comp.stderr}", comp.returncode
+            update_terminal(f"🚀 Executing java {class_name}...\n")
+            res = subprocess.run(
+                ["java", class_name],
+                capture_output=True, text=True, timeout=timeout_sec
+            )
+            return res.stdout, res.stderr, res.returncode
+
+        elif target_lang == "JavaScript":
+            update_terminal(f"🚀 Executing {source_file} with Node.js...\n")
+            res = subprocess.run(
+                ["node", source_file],
+                capture_output=True, text=True, timeout=timeout_sec
+            )
+            return res.stdout, res.stderr, res.returncode
+
+        elif target_lang == "Go":
+            update_terminal(f"🚀 Running {source_file} with Go...\n")
+            res = subprocess.run(
+                ["go", "run", source_file],
+                capture_output=True, text=True, timeout=timeout_sec
+            )
+            return res.stdout, res.stderr, res.returncode
+
+        elif target_lang == "HTML & CSS":
+            abs_html = os.path.abspath(source_file)
+            webbrowser.open(f"file://{abs_html}")
+            return f"🌐 Opened {abs_html} in your default web browser.", "", 0
+
+    except subprocess.TimeoutExpired:
+        return "", f"⏱️ Execution timed out after {timeout_sec} seconds (possible infinite loop).", 1
+
 
 def background_compiler_worker(english_code, target_lang):
-    """Processes the embedded local AI inference and execution pipeline inside a worker thread."""
+    """Processes local AI inference, compilation, and execution inside a worker thread."""
     try:
-        llm = get_embedded_model()
+        # 1. Verify system toolchain before doing heavy inference
+        ok, err_msg = check_toolchain_availability(target_lang)
+        if not ok:
+            update_terminal(f"\n{err_msg}\n")
+            reset_ui_state(("Missing Toolchain", err_msg, True))
+            return
 
-        pause_rule = (
-            "Do NOT include any `input()` calls so execution completes cleanly."
-            if target_lang == "Python"
-            else "Append a native pause statement at the end (e.g., `getchar();` for C, `std::cin.get();` for C++)."
-        )
+        # 2. Load model and generate source code
+        llm = get_embedded_model()
 
         system_prompt = (
             f"You are a strict code compiler. Translate the user's plain English programming logic "
-            f"into actual, syntactically correct {target_lang} source code. Follow these rules precisely:\n"
-            f"1. Fix all indentation, structure, brackets, and logical flows to conform perfectly to {target_lang} language specifications.\n"
-            f"2. Output ONLY the raw executable {target_lang} code.\n"
-            f"3. Do NOT include markdown code blocks (like ```python ... ```), text formatting, or conversational notes.\n"
-            f"4. {pause_rule}"
+            f"into complete, runnable, syntactically correct {target_lang} source code. Rules:\n"
+            f"1. Conform strictly to {target_lang} syntax and include all necessary imports/headers and main entry points.\n"
+            f"2. Output ONLY raw executable {target_lang} code.\n"
+            f"3. Do NOT include markdown code fences (```), explanations, or notes.\n"
+            f"4. Do NOT include blocking interactive input calls (like input(), scanf(), cin, Scanner) so automated execution completes cleanly."
         )
 
         response = llm.create_chat_completion(
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Translate this code:\n\n{english_code}"}
+                {"role": "user", "content": f"Translate this logic into {target_lang}:\n\n{english_code}"}
             ],
             temperature=0.0
         )
-        
+
         compiled_source = response["choices"][0]["message"]["content"].strip()
 
-        # Strip accidental markdown fences if the local model outputs them
+        # Strip accidental markdown fences if emitted
         if compiled_source.startswith("```"):
             lines = compiled_source.splitlines()
             compiled_source = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:]).strip()
 
-        update_terminal(f"--- Compiled {target_lang} Source Struct ---\n")
+        update_terminal(f"--- Compiled {target_lang} Source ---\n")
         update_terminal(compiled_source + "\n")
-        update_terminal("-----------------------------------------\n\n")
+        update_terminal("-------------------------------------\n\n")
 
-        # Language Runtime Routing Engine
-        if target_lang == "Python":
-            auto_install_dependencies(compiled_source)
-            update_terminal("🚀 Launching execution environment engine thread...\n")
-            output_buffer = io.StringIO()
-            with redirect_stdout(output_buffer):
-                try:
-                    exec(compiled_source, {})
-                except Exception as runtime_err:
-                    print(f"Runtime Execution Error: {runtime_err}")
-            execution_results = output_buffer.getvalue()
-            update_terminal(f"\n💻 Result Output:\n{execution_results if execution_results else '[Execution Complete: No Stdout Stream Data returned]'}\n")
-        else:
-            update_terminal("💡 Syntax Generation Complete: Generated source code verification passed.\n")
-
-        # Dynamic File Extension Mapping
+        # 3. Determine output filename (handle Java public class naming)
         extension_map = {
-            "Python": ".py", "C": ".c", "Java": ".java", "JavaScript": ".js", "HTML & CSS": ".html", "C++": ".cpp", "Go": ".go"
+            "Python": ".py",
+            "C": ".c",
+            "C++": ".cpp",
+            "Java": ".java",
+            "JavaScript": ".js",
+            "Go": ".go",
+            "HTML & CSS": ".html"
         }
-        
-        file_ext = extension_map.get(target_lang, ".txt")
-        output_file_name = f"output{file_ext}"
+
+        if target_lang == "Java":
+            match = re.search(r'public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)', compiled_source)
+            base_name = match.group(1) if match else "Main"
+            output_file_name = f"{base_name}.java"
+        else:
+            output_file_name = f"output{extension_map.get(target_lang, '.txt')}"
 
         with open(output_file_name, "w", encoding="utf-8") as out_file:
             out_file.write(compiled_source)
 
-        run_button.config(state=tk.NORMAL, text="⚡ Compile & Execute Logic")
-        messagebox.showinfo("Compilation Success", f"Source logic built successfully! Raw file saved as '{output_file_name}'")
+        # 4. Compile and run
+        stdout, stderr, returncode = execute_compiled_artifact(
+            target_lang, output_file_name, compiled_source
+        )
+
+        if stdout:
+            update_terminal(f"\n💻 Program Output:\n{stdout}\n")
+        if stderr:
+            update_terminal(f"\n⚠️ Compiler / Runtime Diagnostics:\n{stderr}\n")
+        if not stdout and not stderr:
+            update_terminal("\n💻 Execution Complete (No stdout returned).\n")
+
+        if returncode == 0:
+            reset_ui_state((
+                "Build & Run Success",
+                f"Source built and executed cleanly!\nSaved as '{output_file_name}'.",
+                False
+            ))
+        else:
+            reset_ui_state((
+                "Build / Runtime Error",
+                f"Process exited with code {returncode}. Check the terminal log for details.",
+                True
+            ))
 
     except Exception as e:
-        update_terminal(f"\n❌ Operational Processing Error encountered:\n{e}\n")
-        run_button.config(state=tk.NORMAL, text="⚡ Compile & Execute Logic")
+        update_terminal(f"\n❌ Operational Processing Error:\n{e}\n")
+        reset_ui_state(("Error", str(e), True))
+
 
 def start_compilation():
     english_code = code_input.get("1.0", tk.END).strip()
     target_lang = language_var.get()
-    
+
     if not english_code:
-        messagebox.showwarning("Empty Editor", "Please drop instructions into the text engine frame.")
+        messagebox.showwarning("Empty Editor", "Please enter plain English instructions in the editor.")
         return
 
     terminal_output.config(state=tk.NORMAL)
     terminal_output.delete("1.0", tk.END)
     terminal_output.config(state=tk.DISABLED)
-    
-    update_terminal(f"🤖 Transpiling English into raw standard {target_lang} structure...\n\n")
+
+    update_terminal(f"🤖 Transpiling English into {target_lang}...\n\n")
     run_button.config(state=tk.DISABLED, text="⏳ Processing...")
 
-    threading.Thread(target=background_compiler_worker, args=(english_code, target_lang), daemon=True).start()
+    threading.Thread(
+        target=background_compiler_worker,
+        args=(english_code, target_lang),
+        daemon=True
+    ).start()
 
-# --- Footer Action Toolbar Control Panel ---
+
+# --- Footer Action Toolbar ---
 bottom_frame = tk.Frame(root, bg="#1e1e1e")
 bottom_frame.pack(fill=tk.X, side=tk.BOTTOM, pady=15)
 
-run_button = tk.Button(bottom_frame, text="⚡ Compile & Execute Logic", font=("Segoe UI", 11, "bold"), fg="#ffffff", bg="#007acc", activebackground="#005999", padx=25, command=start_compilation)
+run_button = tk.Button(
+    bottom_frame,
+    text="⚡ Compile & Execute Logic",
+    font=("Segoe UI", 11, "bold"),
+    fg="#ffffff",
+    bg="#007acc",
+    activebackground="#005999",
+    padx=25,
+    command=start_compilation
+)
 run_button.pack()
+
+# Run initial PATH diagnostic check on launch
+check_all_toolchains_on_startup()
 
 root.mainloop()
