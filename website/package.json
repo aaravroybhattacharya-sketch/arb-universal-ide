@@ -1,7 +1,0 @@
-{
-  "name": "arb-website",
-  "private": true,
-  "dependencies": {
-    "googleapis": "^144.0.0"
-  }
-}
