@@ -1,6 +1,6 @@
 [Setup]
 AppName=ARB Universal IDE
-AppVersion=1.0.1
+AppVersion=latest
 DefaultDirName={autopf}\ARB Universal IDE
 DefaultGroupName=ARB Universal IDE
 OutputDir=installer_output
