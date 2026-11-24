@@ -1,49 +1,41 @@
-name: Build and Replace v1.2.0 Release
+name: Build Windows Installer
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build-windows:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-
+          python-version: '3.12'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller huggingface_hub
           pip install llama-cpp-python --extra-index-url https://github.io
-          python -c "import llama_cpp; print('llama_cpp verified!')"
+          pip install huggingface-hub pyinstaller
 
-      - name: Build dist\app with PyInstaller
+      - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm --onedir --windowed `
-            --icon="icon\arb_icon.ico" `
-            --add-data "icon\arb_icon.ico;." `
-            --hidden-import=llama_cpp `
-            --collect-all llama_cpp `
-            --collect-all huggingface_hub `
-            app.py
+          pyinstaller --noconfirm --onedir --windowed --name app --collect-all llama_cpp app.py
 
-      - name: Compile setup.iss with Inno Setup
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
-        with:
-          path: setup.iss
+      - name: Build Installer with Inno Setup
+        run: |
+          iscc setup.iss
 
-      - name: Overwrite EXE in v1.2.0 Release
+      - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          tag_name: v1.2.0
           files: installer_output/ARB_Universal_IDE.exe
-          overwrite_files: true
