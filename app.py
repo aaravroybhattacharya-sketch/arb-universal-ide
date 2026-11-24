@@ -1,519 +1,989 @@
-import sys
+import json
 import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
+import urllib.error
+import urllib.request
 import webbrowser
 import tkinter as tk
-from tkinter import messagebox, ttk
-from llama_cpp import Llama
-from huggingface_hub import hf_hub_download
+from tkinter import filedialog, messagebox, ttk
 
-if os.name == "nt":
-    import winreg
+try:
+    from llama_cpp import Llama
+    from huggingface_hub import hf_hub_download
+    HAS_LLAMA_CPP = True
+except ImportError:
+    HAS_LLAMA_CPP = False
+    Llama = None
+    hf_hub_download = None
 
-# Global model cache & lock to prevent duplicate loads
+
+EMBEDDED_MODELS = {
+    "Qwen 2.5 Coder 7B": (
+        "Qwen/Qwen2.5-Coder-7B-Instruct-GGUF",
+        "qwen2.5-coder-7b-instruct-q4_k_m.gguf",
+    ),
+    "Qwen 2.5 Coder 3B": (
+        "Qwen/Qwen2.5-Coder-3B-Instruct-GGUF",
+        "qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+    ),
+    "Qwen 2.5 Coder 1.5B": (
+        "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+        "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+    ),
+}
+
+workspace_dir = os.path.abspath(
+    os.path.join(os.path.expanduser("~"), "ARB_Workspace")
+)
+os.makedirs(workspace_dir, exist_ok=True)
+
+undo_history = []
 llm_engine = None
+loaded_model_name = None
 model_lock = threading.Lock()
 
-# --- Initialize UI Window ---
+
 root = tk.Tk()
-root.title("ARB Multi-Language AI Compiler (Offline Embedded)")
-root.geometry("1150x680")
+root.title("ARB Universal IDE")
+root.geometry("1280x800")
 root.configure(bg="#1e1e1e")
 
-if os.path.exists("arb_icon.ico"):
-    root.iconbitmap("arb_icon.ico")
+top_bar = tk.Frame(root, bg="#252526", height=46)
+top_bar.pack(fill=tk.X)
+top_bar.pack_propagate(False)
 
-# --- Top Navigation Bar ---
-top_bar = tk.Frame(root, bg="#252526", height=50)
-top_bar.pack(fill=tk.X, side=tk.TOP)
+main_frame = tk.Frame(root, bg="#1e1e1e")
+main_frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=10)
 
-title_label = tk.Label(
+sidebar = tk.Frame(main_frame, bg="#252526", width=210)
+sidebar.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8))
+sidebar.pack_propagate(False)
+
+editor = tk.Frame(main_frame, bg="#252526")
+editor.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+terminal_frame = tk.Frame(main_frame, bg="#252526", width=360)
+terminal_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(8, 0))
+terminal_frame.pack_propagate(False)
+
+
+tk.Label(
     top_bar,
-    text="📝 ARB AI Universal IDE (Local)",
-    font=("Segoe UI", 12, "bold"),
-    fg="#ffffff",
-    bg="#252526"
-)
-title_label.pack(side=tk.LEFT, padx=20, pady=10)
-
-lang_label = tk.Label(
-    top_bar,
-    text="Target Language:",
+    text="Backend:",
     fg="#aaaaaa",
     bg="#252526",
-    font=("Segoe UI", 10)
+).pack(side=tk.LEFT, padx=(10, 4))
+
+backend_var = tk.StringVar(value="Embedded (GGUF)")
+backend_dropdown = ttk.Combobox(
+    top_bar,
+    textvariable=backend_var,
+    state="readonly",
+    width=18,
+    values=(
+        "Embedded (GGUF)",
+        "Ollama (Local API)",
+        "LM Studio (Local API)",
+    ),
 )
-lang_label.pack(side=tk.LEFT, padx=(20, 5))
+backend_dropdown.pack(side=tk.LEFT)
+
+tk.Label(
+    top_bar,
+    text="Model:",
+    fg="#aaaaaa",
+    bg="#252526",
+).pack(side=tk.LEFT, padx=(10, 4))
+
+model_var = tk.StringVar(value="Qwen 2.5 Coder 7B")
+model_dropdown = ttk.Combobox(
+    top_bar,
+    textvariable=model_var,
+    state="readonly",
+    width=24,
+    values=list(EMBEDDED_MODELS),
+)
+model_dropdown.pack(side=tk.LEFT)
+
+refresh_models_button = tk.Button(
+    top_bar,
+    text="Refresh",
+    bg="#333333",
+    fg="#ffffff",
+    relief=tk.FLAT,
+)
+refresh_models_button.pack(side=tk.LEFT, padx=4)
+
+tk.Label(
+    top_bar,
+    text="Language:",
+    fg="#aaaaaa",
+    bg="#252526",
+).pack(side=tk.LEFT, padx=(10, 4))
 
 language_var = tk.StringVar(value="Python")
-lang_dropdown = ttk.Combobox(
+language_dropdown = ttk.Combobox(
     top_bar,
     textvariable=language_var,
     state="readonly",
-    width=15,
-    font=("Segoe UI", 10)
+    width=13,
+    values=("Python", "C", "C++", "C#", "Java",
+            "JavaScript", "TypeScript", "HTML & CSS"),
 )
-lang_dropdown["values"] = (
-    "Python",
-    "C",
-    "C++",
-    "C#",
-    "Java",
-    "JavaScript",
-    "TypeScript",
-    "HTML & CSS"
+language_dropdown.pack(side=tk.LEFT)
+
+auto_fix_var = tk.BooleanVar(value=True)
+tk.Checkbutton(
+    top_bar,
+    text="Auto-Fix Errors",
+    variable=auto_fix_var,
+    fg="#cccccc",
+    bg="#252526",
+    selectcolor="#1e1e1e",
+    activebackground="#252526",
+).pack(side=tk.LEFT, padx=(10, 5))
+
+
+sidebar_header = tk.Frame(sidebar, bg="#252526")
+sidebar_header.pack(fill=tk.X, padx=8, pady=8)
+
+tk.Label(
+    sidebar_header,
+    text="WORKSPACE FILES",
+    fg="#bbbbbb",
+    bg="#252526",
+    font=("Segoe UI", 9, "bold"),
+).pack(side=tk.LEFT)
+
+file_listbox = tk.Listbox(
+    sidebar,
+    bg="#252526",
+    fg="#e0e0e0",
+    selectbackground="#094771",
+    selectforeground="#ffffff",
+    borderwidth=0,
+    highlightthickness=0,
+    font=("Consolas", 10),
 )
-lang_dropdown.pack(side=tk.LEFT, padx=5)
+file_listbox.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
 
-# --- Main Split Window Layout ---
-main_frame = tk.Frame(root, bg="#1e1e1e")
-main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
-
-# LEFT SIDE: Editor Panel
-editor_frame = tk.Frame(main_frame, bg="#1e1e1e")
-editor_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
-
-editor_label = tk.Label(
-    editor_frame,
-    text="Write Plain English Logic Here:",
-    fg="#aaaaaa",
-    bg="#1e1e1e",
-    font=("Segoe UI", 10)
-)
-editor_label.pack(anchor=tk.W, pady=(0, 5))
-
-code_input = tk.Text(
-    editor_frame,
-    wrap=tk.WORD,
-    undo=True,
-    font=("Consolas", 12),
-    bg="#2d2d2d",
+open_folder_button = tk.Button(
+    sidebar,
+    text="Open Folder",
+    bg="#0e639c",
     fg="#ffffff",
-    insertbackground="white"
+    relief=tk.FLAT,
+    pady=5,
 )
-code_input.pack(fill=tk.BOTH, expand=True)
+open_folder_button.pack(fill=tk.X, padx=8, pady=(0, 5))
 
-# RIGHT SIDE: Output Screen Terminal Panel
-output_frame = tk.Frame(main_frame, bg="#1e1e1e")
-output_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=5)
+undo_button = tk.Button(
+    sidebar,
+    text="Undo AI Edit",
+    bg="#333333",
+    fg="#ffffff",
+    relief=tk.FLAT,
+    pady=5,
+    state=tk.DISABLED,
+)
+undo_button.pack(fill=tk.X, padx=8, pady=(0, 8))
 
-output_label = tk.Label(
-    output_frame,
-    text="AI Compiler & Execution Log Output:",
-    fg="#aaaaaa",
+
+tk.Label(
+    editor,
+    text="Describe what you want to build:",
+    fg="#bbbbbb",
+    bg="#252526",
+).pack(anchor="w", padx=10, pady=(8, 4))
+
+prompt_text = tk.Text(
+    editor,
+    height=7,
     bg="#1e1e1e",
-    font=("Segoe UI", 10)
+    fg="#e0e0e0",
+    insertbackground="#ffffff",
+    font=("Segoe UI", 11),
+    borderwidth=0,
+    padx=10,
+    pady=10,
 )
-output_label.pack(anchor=tk.W, pady=(0, 5))
+prompt_text.pack(fill=tk.X, padx=10)
 
-terminal_output = tk.Text(
-    output_frame,
-    wrap=tk.WORD,
+generate_button = tk.Button(
+    editor,
+    text="Generate && Run",
+    bg="#0e639c",
+    fg="#ffffff",
+    relief=tk.FLAT,
+    pady=8,
+    font=("Segoe UI", 10, "bold"),
+)
+generate_button.pack(fill=tk.X, padx=10, pady=10)
+
+tk.Label(
+    editor,
+    text="Generated code:",
+    fg="#bbbbbb",
+    bg="#252526",
+).pack(anchor="w", padx=10, pady=(4, 4))
+
+code_text = tk.Text(
+    editor,
+    bg="#181818",
+    fg="#d4d4d4",
+    insertbackground="#ffffff",
     font=("Consolas", 11),
-    bg="#121212",
-    fg="#00ff00",
-    state=tk.DISABLED
+    borderwidth=0,
+    padx=10,
+    pady=10,
+    wrap=tk.NONE,
 )
-terminal_output.pack(fill=tk.BOTH, expand=True)
+code_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
 
 
-# --- Thread-Safe UI Helpers ---
-def update_terminal(text):
-    """Safely updates the custom terminal UI on the main Tkinter thread."""
-    def _append():
-        terminal_output.config(state=tk.NORMAL)
-        terminal_output.insert(tk.END, text)
-        terminal_output.see(tk.END)
-        terminal_output.config(state=tk.DISABLED)
-    root.after(0, _append)
+terminal_header = tk.Frame(terminal_frame, bg="#252526")
+terminal_header.pack(fill=tk.X, padx=8, pady=8)
+
+tk.Label(
+    terminal_header,
+    text="OUTPUT",
+    fg="#bbbbbb",
+    bg="#252526",
+    font=("Segoe UI", 9, "bold"),
+).pack(side=tk.LEFT)
+
+clear_terminal_button = tk.Button(
+    terminal_header,
+    text="Clear",
+    bg="#333333",
+    fg="#ffffff",
+    relief=tk.FLAT,
+)
+clear_terminal_button.pack(side=tk.RIGHT)
+
+terminal_text = tk.Text(
+    terminal_frame,
+    bg="#181818",
+    fg="#d4d4d4",
+    font=("Consolas", 10),
+    borderwidth=0,
+    padx=8,
+    pady=8,
+    wrap=tk.WORD,
+)
+terminal_text.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
 
 
-def reset_ui_state(show_popup=None):
-    """Safely re-enables the Run button and optionally displays a popup on the main thread."""
-    def _reset():
-        run_button.config(state=tk.NORMAL, text="⚡ Compile & Execute Logic")
-        if show_popup:
-            title, msg, is_error = show_popup
-            if is_error:
-                messagebox.showerror(title, msg)
-            else:
-                messagebox.showinfo(title, msg)
-    root.after(0, _reset)
+def write_terminal(text):
+    def append():
+        terminal_text.configure(state=tk.NORMAL)
+        terminal_text.insert(tk.END, text)
+        terminal_text.see(tk.END)
+
+    root.after(0, append)
 
 
-# --- Toolchain / PATH Verification & Auto-Installer ---
-def refresh_windows_path():
-    """Reloads the Windows System and User PATH from the Registry into the current Python process."""
-    if os.name != "nt":
+def reset_ui():
+    root.after(
+        0,
+        lambda: generate_button.config(
+            state=tk.NORMAL,
+            text="Generate && Run",
+        ),
+    )
+
+
+def safe_workspace_path(relative_path):
+    if not isinstance(relative_path, str):
+        return None
+
+    clean_path = relative_path.strip()
+    clean_path = clean_path.replace("/", os.sep).replace("\\", os.sep)
+    clean_path = clean_path.lstrip("/\\")
+
+    full_path = os.path.abspath(
+        os.path.join(workspace_dir, os.path.normpath(clean_path))
+    )
+    workspace = os.path.abspath(workspace_dir)
+
+    try:
+        if os.path.commonpath((workspace, full_path)) != workspace:
+            return None
+    except ValueError:
+        return None
+
+    return full_path
+
+
+def refresh_file_tree():
+    file_listbox.delete(0, tk.END)
+    os.makedirs(workspace_dir, exist_ok=True)
+
+    for base_directory, directories, filenames in os.walk(workspace_dir):
+        directories[:] = [
+            directory
+            for directory in directories
+            if not directory.startswith(".")
+            and directory not in {
+                "__pycache__",
+                "node_modules",
+                "bin",
+                "obj",
+            }
+        ]
+
+        for filename in sorted(filenames):
+            full_path = os.path.join(base_directory, filename)
+            relative_path = os.path.relpath(full_path, workspace_dir)
+            file_listbox.insert(tk.END, relative_path)
+
+
+def open_workspace_folder():
+    global workspace_dir
+
+    selected_directory = filedialog.askdirectory(
+        initialdir=workspace_dir,
+        title="Select Project Workspace",
+    )
+
+    if selected_directory:
+        workspace_dir = os.path.abspath(selected_directory)
+        refresh_file_tree()
+        write_terminal(
+            "Switched workspace to: "
+            + workspace_dir
+            + "\n"
+        )
+
+
+def open_selected_file(event=None):
+    selection = file_listbox.curselection()
+    if not selection:
         return
 
-    paths = []
-    registry_locations = [
-        (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"),
-        (winreg.HKEY_CURRENT_USER, r"Environment"),
-    ]
+    relative_path = file_listbox.get(selection[0])
+    full_path = safe_workspace_path(relative_path)
 
-    for root_key, sub_key in registry_locations:
-        try:
-            with winreg.OpenKey(root_key, sub_key) as key:
-                val, _ = winreg.QueryValueEx(key, "Path")
-                if val:
-                    expanded = os.path.expandvars(val)
-                    paths.extend(expanded.split(";"))
-        except FileNotFoundError:
+    if not full_path:
+        return
+
+    try:
+        with open(full_path, "r", encoding="utf-8",
+                  errors="replace") as file_handle:
+            content = file_handle.read()
+
+        code_text.delete("1.0", tk.END)
+        code_text.insert("1.0", content)
+    except OSError as error:
+        write_terminal("Could not open file: " + str(error) + "\n")
+
+
+def save_workspace_snapshot(relative_paths):
+    snapshot = {}
+
+    for relative_path in relative_paths:
+        full_path = safe_workspace_path(relative_path)
+
+        if full_path and os.path.isfile(full_path):
+            with open(full_path, "r", encoding="utf-8",
+                      errors="replace") as file_handle:
+                snapshot[relative_path] = file_handle.read()
+        else:
+            snapshot[relative_path] = None
+
+    undo_history.append(snapshot)
+    root.after(0, lambda: undo_button.config(state=tk.NORMAL))
+
+
+def undo_last_edit():
+    if not undo_history:
+        messagebox.showinfo(
+            "Nothing to Undo",
+            "No previous AI file changes to revert.",
+        )
+        return
+
+    snapshot = undo_history.pop()
+
+    for relative_path, old_content in snapshot.items():
+        full_path = safe_workspace_path(relative_path)
+
+        if not full_path:
             continue
 
-    current_paths = os.environ.get("PATH", "").split(";")
-    merged = []
-    for p in paths + current_paths:
-        p = p.strip()
-        if p and p not in merged:
-            merged.append(p)
-    os.environ["PATH"] = ";".join(merged)
+        if old_content is None:
+            if os.path.isfile(full_path):
+                os.remove(full_path)
+        else:
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, "w", encoding="utf-8") as file_handle:
+                file_handle.write(old_content)
+
+    refresh_file_tree()
+    write_terminal("Reverted the last AI file edit.\n")
+
+    if not undo_history:
+        undo_button.config(state=tk.DISABLED)
 
 
-def install_missing_toolchains(missing_items):
-    """Installs missing compilers/runtimes via winget in a background thread."""
-    def _worker():
-        root.after(0, lambda: run_button.config(state=tk.DISABLED, text="📦 Installing Toolchains..."))
-        update_terminal("\n🛠️ Starting automated toolchain installation via winget...\n")
+def parse_multi_file_output(raw_text, default_filename):
+    pattern = re.compile(
+        r"===FILE:\s*(.+?)\s*===\r?\n"
+        r"(.*?)"
+        r"(?=\r?\n===FILE:|\Z)",
+        re.DOTALL,
+    )
 
-        installed_ids = set()
+    matches = pattern.findall(raw_text)
+    generated_files = {}
 
-        for name, cmd, winget_id in missing_items:
-            if winget_id in installed_ids:
-                update_terminal(f"ℹ️ {name} is covered by already-installed package ({winget_id}).\n")
-                continue
+    for filename, content in matches:
+        filename = filename.strip().replace("\\", "/").lstrip("/")
+        content = re.sub(
+            r"^```[a-zA-Z0-9_+-]*\s*\n|```$",
+            "",
+            content.strip(),
+            flags=re.MULTILINE,
+        ).strip()
 
-            update_terminal(f"\n📥 Installing {name} ({winget_id})... Please wait (may take 1-3 minutes)...\n")
-            try:
-                proc = subprocess.run(
-                    [
-                        "winget", "install",
-                        "--id", winget_id,
-                        "-e", "--silent",
-                        "--accept-package-agreements",
-                        "--accept-source-agreements"
-                    ],
-                    capture_output=True,
-                    text=True
-                )
-                if proc.returncode == 0:
-                    update_terminal(f"✅ Successfully installed {name}!\n")
-                    installed_ids.add(winget_id)
-                else:
-                    update_terminal(f"⚠️ winget returned code {proc.returncode} for {name}:\n{proc.stderr or proc.stdout}\n")
-            except Exception as e:
-                update_terminal(f"❌ Failed to install {name}: {e}\n")
+        if filename:
+            generated_files[filename] = content
 
-        update_terminal("\n🔄 Refreshing system PATH environment variables...\n")
-        refresh_windows_path()
+    if not generated_files:
+        content = re.sub(
+            r"^```[a-zA-Z0-9_+-]*\s*\n|```$",
+            "",
+            raw_text.strip(),
+            flags=re.MULTILINE,
+        ).strip()
+        generated_files[default_filename] = content
 
-        update_terminal("\n🔎 Re-checking System Toolchain PATH Diagnostics:\n")
-        tools = [
-            ("Python", sys.executable),
-            ("GCC (C)", "gcc"),
-            ("G++ (C++)", "g++"),
-            (".NET SDK (C#)", "dotnet"),
-            ("JDK (Java)", "javac"),
-            ("Node.js (JS/TS)", "node"),
+    return generated_files
+
+
+def fetch_external_models(backend_name):
+    try:
+        if "Ollama" in backend_name:
+            url = "http://localhost:11434/api/tags"
+        else:
+            url = "http://localhost:1234/v1/models"
+
+        request = urllib.request.Request(url)
+
+        with urllib.request.urlopen(request, timeout=2) as response:
+            data = json.loads(response.read().decode("utf-8"))
+
+        if "Ollama" in backend_name:
+            return [
+                item["name"]
+                for item in data.get("models", [])
+                if "name" in item
+            ]
+
+        return [
+            item["id"]
+            for item in data.get("data", [])
+            if "id" in item
         ]
-        for label, binary in tools:
-            found = shutil.which(binary)
-            status = f"✅ {label}: Found ({found})" if found else f"⚠️ {label}: Still not found (try restarting the IDE)"
-            update_terminal(f"  {status}\n")
 
-        update_terminal("\n✅ Setup check complete!\n")
-        reset_ui_state()
+    except (
+        OSError,
+        urllib.error.URLError,
+        json.JSONDecodeError,
+        TimeoutError,
+    ):
+        return []
 
-    threading.Thread(target=_worker, daemon=True).start()
+
+def sync_model_dropdown(event=None):
+    backend_name = backend_var.get()
+
+    if "Embedded" in backend_name:
+        model_names = list(EMBEDDED_MODELS)
+        model_dropdown["values"] = model_names
+
+        if model_var.get() not in model_names:
+            model_var.set(model_names[0])
+
+        return
+
+    model_names = fetch_external_models(backend_name)
+
+    if model_names:
+        model_dropdown["values"] = model_names
+
+        if model_var.get() not in model_names:
+            model_var.set(model_names[0])
+
+        write_terminal(
+            "Found "
+            + str(len(model_names))
+            + " model(s) in "
+            + backend_name
+            + ".\n"
+        )
+    else:
+        model_dropdown["values"] = ["No local models found"]
+        model_var.set("No local models found")
+        write_terminal(
+            "Could not connect to "
+            + backend_name
+            + ". Make sure it is running locally.\n"
+        )
 
 
-def check_toolchain_availability(target_lang):
-    """Verifies that the required compiler or runtime exists in the system PATH."""
-    refresh_windows_path()
-    requirements = {
-        "Python": [(sys.executable, "Python interpreter")],
-        "C": [("gcc", "GCC / MinGW C Compiler")],
-        "C++": [("g++", "G++ / MinGW C++ Compiler")],
-        "C#": [("dotnet", ".NET SDK (dotnet)")],
-        "Java": [("javac", "Java JDK Compiler (javac)"), ("java", "Java Runtime (java)")],
-        "JavaScript": [("node", "Node.js Runtime")],
-        "TypeScript": [("node", "Node.js Runtime"), ("npx", "NPX Package Runner")],
-        "HTML & CSS": []
+def build_workspace_context(maximum_characters=6000):
+    allowed_extensions = {
+        ".py",
+        ".c",
+        ".cpp",
+        ".h",
+        ".cs",
+        ".java",
+        ".js",
+        ".ts",
+        ".html",
+        ".css",
+        ".json",
     }
 
-    missing = []
-    for binary, label in requirements.get(target_lang, []):
-        if not shutil.which(binary):
-            missing.append(f"• {label} ('{binary}' not found in PATH)")
+    chunks = []
+    total_characters = 0
 
-    if missing:
-        return False, (
-            f"❌ Missing System Toolchain for {target_lang}:\n"
-            + "\n".join(missing)
-            + "\n\nPlease install the missing toolchain or restart the IDE to refresh PATH."
+    for base_directory, directories, filenames in os.walk(workspace_dir):
+        directories[:] = [
+            directory
+            for directory in directories
+            if not directory.startswith(".")
+            and directory not in {
+                "__pycache__",
+                "node_modules",
+                "bin",
+                "obj",
+            }
+        ]
+
+        for filename in sorted(filenames):
+            extension = os.path.splitext(filename)[1].lower()
+
+            if extension not in allowed_extensions:
+                continue
+
+            full_path = os.path.join(base_directory, filename)
+            relative_path = os.path.relpath(full_path, workspace_dir)
+
+            try:
+                with open(full_path, "r", encoding="utf-8",
+                          errors="replace") as file_handle:
+                    content = file_handle.read()
+
+                chunk = (
+                    "--- EXISTING FILE: "
+                    + relative_path
+                    + " ---\n"
+                    + content
+                    + "\n"
+                )
+
+                if total_characters + len(chunk) > maximum_characters:
+                    break
+
+                chunks.append(chunk)
+                total_characters += len(chunk)
+
+            except OSError:
+                continue
+
+    return "\n".join(chunks)
+
+
+def get_embedded_model(model_label):
+    global llm_engine, loaded_model_name
+
+    if model_label not in EMBEDDED_MODELS:
+        raise ValueError("Unknown embedded model")
+
+    if not HAS_LLAMA_CPP:
+        raise RuntimeError(
+            "llama-cpp-python is not installed. "
+            "Choose Ollama or LM Studio."
         )
-    return True, ""
 
+    repository, filename = EMBEDDED_MODELS[model_label]
 
-def check_all_toolchains_on_startup():
-    """Checks all compilers on launch and offers to auto-install missing ones."""
-    refresh_windows_path()
-
-    # Format: (Display Name, Executable Name, Winget Package ID)
-    tools = [
-        ("Python", sys.executable, "Python.Python.3.12"),
-        ("GCC (C)", "gcc", "BrechtSanders.WinLibs.POSIX.UCRT"),
-        ("G++ (C++)", "g++", "BrechtSanders.WinLibs.POSIX.UCRT"),
-        (".NET SDK (C#)", "dotnet", "Microsoft.DotNet.SDK.8"),
-        ("JDK (Java)", "javac", "EclipseAdoptium.Temurin.21.JDK"),
-        ("Node.js (JS/TS)", "node", "OpenJS.NodeJS.LTS"),
-    ]
-
-    status_lines = ["🔎 System Toolchain PATH Diagnostics:\n"]
-    missing_tools = []
-
-    for name, cmd, winget_id in tools:
-        path = shutil.which(cmd)
-        if path:
-            status_lines.append(f"  ✅ {name}: Found ({path})\n")
-        else:
-            status_lines.append(f"  ⚠️ {name}: Not found in PATH\n")
-            missing_tools.append((name, cmd, winget_id))
-
-    update_terminal("".join(status_lines))
-
-    if missing_tools:
-        if os.name != "nt" or not shutil.which("winget"):
-            update_terminal("\n⚠️ 'winget' is not available on this system. Please install missing tools manually.\n")
-            return
-
-        missing_names = ", ".join(item[0] for item in missing_tools)
-        ask = messagebox.askyesno(
-            "Missing Compilers & Runtimes",
-            f"The following toolchains are missing from your PATH:\n\n{missing_names}\n\n"
-            "Would you like ARB IDE to automatically download and install all of them now using winget?"
-        )
-        if ask:
-            install_missing_toolchains(missing_tools)
-        else:
-            update_terminal("\n⏭️ Skipped automatic installation. Only installed languages can be executed.\n")
-    else:
-        update_terminal("\n🎉 All toolchains are installed and ready!\n")
-
-
-# --- Core Embedded AI & Execution Pipeline ---
-def get_embedded_model():
-    """Thread-safe lazy loader for the local GGUF model."""
-    global llm_engine
     with model_lock:
-        if llm_engine is None:
-            update_terminal("📥 Checking/Downloading local Qwen 2.5 Coder model (~4.7 GB on first run)...\n")
-            model_path = hf_hub_download(
-                repo_id="Qwen/Qwen2.5-Coder-7B-Instruct-GGUF",
-                filename="qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+        if (
+            llm_engine is None
+            or loaded_model_name != model_label
+        ):
+            write_terminal(
+                "Downloading/loading "
+                + model_label
+                + "...\n"
             )
-            update_terminal("🧠 Loading AI model directly into system memory...\n")
+
+            model_path = hf_hub_download(
+                repo_id=repository,
+                filename=filename,
+            )
+
             llm_engine = Llama(
                 model_path=model_path,
-                n_ctx=4096,
+                n_ctx=8192,
                 n_gpu_layers=-1,
-                verbose=False
+                verbose=False,
             )
+            loaded_model_name = model_label
+
     return llm_engine
 
 
-def auto_install_dependencies(compiled_code):
-    """Scans Python code for third-party imports and installs missing packages."""
-    update_terminal("🔍 Analyzing Python imports for third-party dependencies...\n")
-    imports = re.findall(r'^\s*(?:import|from)\s+([a-zA-Z0-9_]+)', compiled_code, re.MULTILINE)
+def generate(messages):
+    backend_name = backend_var.get()
+    selected_model = model_var.get()
 
-    stdlib = getattr(sys, "stdlib_module_names", {
-        'sys', 'os', 'math', 'random', 'time', 'json', 're', 'datetime',
-        'collections', 'itertools', 'io', 'pathlib', 'subprocess', 'threading'
-    })
-    packages_to_check = set(imports) - stdlib
+    if "Embedded" in backend_name:
+        model = get_embedded_model(selected_model)
+        response = model.create_chat_completion(
+            messages=messages,
+            temperature=0.0,
+        )
+        return response["choices"][0]["message"]["content"].strip()
 
-    pypi_alias = {
-        "cv2": "opencv-python",
-        "PIL": "Pillow",
-        "sklearn": "scikit-learn",
-        "yaml": "PyYAML",
-        "bs4": "beautifulsoup4"
+    if "Ollama" in backend_name:
+        payload = json.dumps({
+            "model": selected_model,
+            "messages": messages,
+            "stream": False,
+            "options": {
+                "temperature": 0.0,
+            },
+        }).encode("utf-8")
+
+        request = urllib.request.Request(
+            "http://localhost:11434/api/chat",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+
+        with urllib.request.urlopen(request, timeout=120) as response:
+            data = json.loads(response.read().decode("utf-8"))
+
+        return data["message"]["content"].strip()
+
+    if "LM Studio" in backend_name:
+        payload = json.dumps({
+            "model": selected_model,
+            "messages": messages,
+            "temperature": 0.0,
+        }).encode("utf-8")
+
+        request = urllib.request.Request(
+            "http://localhost:1234/v1/chat/completions",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+
+        with urllib.request.urlopen(request, timeout=120) as response:
+            data = json.loads(response.read().decode("utf-8"))
+
+        return data["choices"][0]["message"]["content"].strip()
+
+    raise ValueError("Unsupported backend: " + backend_name)
+
+
+def check_toolchain(language):
+    checks = {
+        "C": "gcc",
+        "C++": "g++",
+        "C#": "dotnet",
+        "Java": "javac",
+        "JavaScript": "node",
+        "TypeScript": "npx",
     }
 
-    for package in packages_to_check:
-        try:
-            __import__(package)
-        except ImportError:
-            pip_name = pypi_alias.get(package, package)
-            update_terminal(f"📦 Missing package '{package}'. Installing '{pip_name}' via pip...\n")
-            try:
-                subprocess.check_call(
-                    [sys.executable, "-m", "pip", "install", pip_name],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
-                )
-                update_terminal(f"✅ Successfully installed: {pip_name}\n")
-            except Exception as pip_err:
-                update_terminal(f"⚠️ Automatic install failed for '{pip_name}': {pip_err}\n")
+    executable = checks.get(language)
+
+    if executable and shutil.which(executable) is None:
+        return (
+            False,
+            language
+            + " toolchain not found: "
+            + executable,
+        )
+
+    return True, ""
 
 
-def execute_compiled_artifact(target_lang, source_file, compiled_source):
-    """Compiles and executes the generated source file in an isolated subprocess."""
-    exe_suffix = ".exe" if os.name == "nt" else ""
-    timeout_sec = 25
+def execute_program(language, entry_file, source_code):
+    timeout_seconds = 25
 
     try:
-        if target_lang == "Python":
-            auto_install_dependencies(compiled_source)
-            update_terminal("🚀 Running Python script in isolated subprocess...\n")
-            res = subprocess.run(
-                [sys.executable, source_file],
-                capture_output=True, text=True, timeout=timeout_sec
+        if language == "Python":
+            imports = re.findall(
+                r"^\s*(?:from\s+([A-Za-z_]\w*)"
+                r"|import\s+([A-Za-z_]\w*))",
+                source_code,
+                re.MULTILINE,
             )
-            return res.stdout, res.stderr, res.returncode
 
-        elif target_lang == "C":
-            bin_file = f"output_c{exe_suffix}"
-            update_terminal(f"🔨 Compiling {source_file} with gcc...\n")
-            comp = subprocess.run(
-                ["gcc", source_file, "-o", bin_file],
-                capture_output=True, text=True, timeout=timeout_sec
-            )
-            if comp.returncode != 0:
-                return "", f"GCC Compilation Error:\n{comp.stderr}", comp.returncode
-            update_terminal(f"🚀 Executing ./{bin_file}...\n")
-            res = subprocess.run(
-                [os.path.abspath(bin_file)],
-                capture_output=True, text=True, timeout=timeout_sec
-            )
-            return res.stdout, res.stderr, res.returncode
+            standard_library = {
+                "os",
+                "sys",
+                "re",
+                "json",
+                "math",
+                "random",
+                "datetime",
+                "subprocess",
+                "threading",
+                "tkinter",
+                "urllib",
+                "pathlib",
+                "time",
+            }
 
-        elif target_lang == "C++":
-            bin_file = f"output_cpp{exe_suffix}"
-            update_terminal(f"🔨 Compiling {source_file} with g++...\n")
-            comp = subprocess.run(
-                ["g++", source_file, "-o", bin_file],
-                capture_output=True, text=True, timeout=timeout_sec
-            )
-            if comp.returncode != 0:
-                return "", f"G++ Compilation Error:\n{comp.stderr}", comp.returncode
-            update_terminal(f"🚀 Executing ./{bin_file}...\n")
-            res = subprocess.run(
-                [os.path.abspath(bin_file)],
-                capture_output=True, text=True, timeout=timeout_sec
-            )
-            return res.stdout, res.stderr, res.returncode
+            for import_match in imports:
+                package_name = (
+                    import_match[0] or import_match[1]
+                ).split(".")[0]
 
-        elif target_lang == "C#":
-            cs_proj_dir = os.path.abspath("arb_cs_proj")
-            if not os.path.exists(cs_proj_dir):
-                update_terminal("🏗️ Initializing .NET C# console workspace...\n")
-                init_res = subprocess.run(
-                    ["dotnet", "new", "console", "-o", cs_proj_dir, "--force"],
-                    capture_output=True, text=True, timeout=timeout_sec
+                if package_name not in standard_library:
+                    try:
+                        subprocess.run(
+                            [
+                                sys.executable,
+                                "-m",
+                                "pip",
+                                "install",
+                                package_name,
+                            ],
+                            cwd=workspace_dir,
+                            capture_output=True,
+                            text=True,
+                            timeout=60,
+                        )
+                    except (
+                        OSError,
+                        subprocess.TimeoutExpired,
+                    ):
+                        pass
+
+            result = subprocess.run(
+                [sys.executable, entry_file],
+                cwd=workspace_dir,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+            )
+            return (
+                result.stdout,
+                result.stderr,
+                result.returncode,
+            )
+
+        if language == "C":
+            binary = os.path.join(
+                workspace_dir,
+                "output_c" + (".exe" if os.name == "nt" else ""),
+            )
+            compile_result = subprocess.run(
+                ["gcc", entry_file, "-o", binary],
+                cwd=workspace_dir,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+            )
+
+            if compile_result.returncode != 0:
+                return (
+                    "",
+                    "GCC Error:\n" + compile_result.stderr,
+                    compile_result.returncode,
                 )
-                if init_res.returncode != 0:
-                    return "", f".NET Project Init Error:\n{init_res.stderr}", init_res.returncode
 
-            shutil.copyfile(source_file, os.path.join(cs_proj_dir, "Program.cs"))
-            update_terminal("🔨 Building & running C# project with dotnet...\n")
-            res = subprocess.run(
-                ["dotnet", "run", "--project", cs_proj_dir],
-                capture_output=True, text=True, timeout=timeout_sec
+            result = subprocess.run(
+                [binary],
+                cwd=workspace_dir,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
             )
-            return res.stdout, res.stderr, res.returncode
+            return (
+                result.stdout,
+                result.stderr,
+                result.returncode,
+            )
 
-        elif target_lang == "Java":
-            class_name = os.path.splitext(source_file)[0]
-            update_terminal(f"🔨 Compiling {source_file} with javac...\n")
-            comp = subprocess.run(
-                ["javac", source_file],
-                capture_output=True, text=True, timeout=timeout_sec
+        if language == "C++":
+            binary = os.path.join(
+                workspace_dir,
+                "output_cpp" + (".exe" if os.name == "nt" else ""),
             )
-            if comp.returncode != 0:
-                return "", f"Javac Compilation Error:\n{comp.stderr}", comp.returncode
-            update_terminal(f"🚀 Executing java {class_name}...\n")
-            res = subprocess.run(
+            compile_result = subprocess.run(
+                ["g++", entry_file, "-o", binary],
+                cwd=workspace_dir,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+            )
+
+            if compile_result.returncode != 0:
+                return (
+                    "",
+                    "G++ Error:\n" + compile_result.stderr,
+                    compile_result.returncode,
+                )
+
+            result = subprocess.run(
+                [binary],
+                cwd=workspace_dir,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+            )
+            return (
+                result.stdout,
+                result.stderr,
+                result.returncode,
+            )
+
+        if language == "C#":
+            project_directory = os.path.join(
+                workspace_dir,
+                "arb_cs_proj",
+            )
+            os.makedirs(project_directory, exist_ok=True)
+
+            shutil.copyfile(
+                os.path.join(workspace_dir, entry_file),
+                os.path.join(project_directory, "Program.cs"),
+            )
+
+            result = subprocess.run(
+                ["dotnet", "run", "--project", project_directory],
+                cwd=workspace_dir,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+            )
+            return (
+                result.stdout,
+                result.stderr,
+                result.returncode,
+            )
+
+        if language == "Java":
+            compile_result = subprocess.run(
+                ["javac", entry_file],
+                cwd=workspace_dir,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+            )
+
+            if compile_result.returncode != 0:
+                return (
+                    "",
+                    "Javac Error:\n" + compile_result.stderr,
+                    compile_result.returncode,
+                )
+
+            class_name = os.path.splitext(
+                os.path.basename(entry_file)
+            )[0]
+
+            result = subprocess.run(
                 ["java", class_name],
-                capture_output=True, text=True, timeout=timeout_sec
+                cwd=workspace_dir,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
             )
-            return res.stdout, res.stderr, res.returncode
-
-        elif target_lang == "JavaScript":
-            update_terminal(f"🚀 Executing {source_file} with Node.js...\n")
-            res = subprocess.run(
-                ["node", source_file],
-                capture_output=True, text=True, timeout=timeout_sec
+            return (
+                result.stdout,
+                result.stderr,
+                result.returncode,
             )
-            return res.stdout, res.stderr, res.returncode
 
-        elif target_lang == "TypeScript":
-            update_terminal(f"🚀 Transpiling & executing {source_file} with tsx...\n")
-            npx_cmd = "npx.cmd" if os.name == "nt" else "npx"
-            res = subprocess.run(
-                [npx_cmd, "-y", "tsx", source_file],
-                capture_output=True, text=True, timeout=timeout_sec
+        if language == "JavaScript":
+            result = subprocess.run(
+                ["node", entry_file],
+                cwd=workspace_dir,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
             )
-            return res.stdout, res.stderr, res.returncode
+            return (
+                result.stdout,
+                result.stderr,
+                result.returncode,
+            )
 
-        elif target_lang == "HTML & CSS":
-            abs_html = os.path.abspath(source_file)
-            webbrowser.open(f"file://{abs_html}")
-            return f"🌐 Opened {abs_html} in your default web browser.", "", 0
+        if language == "TypeScript":
+            npx_command = (
+                "npx.cmd"
+                if os.name == "nt"
+                else "npx"
+            )
+            result = subprocess.run(
+                [npx_command, "-y", "tsx", entry_file],
+                cwd=workspace_dir,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+            )
+            return (
+                result.stdout,
+                result.stderr,
+                result.returncode,
+            )
+
+        if language == "HTML & CSS":
+            absolute_html_path = os.path.abspath(
+                os.path.join(workspace_dir, entry_file)
+            )
+            webbrowser.open(
+                "file://" + absolute_html_path
+            )
+            return (
+                "Opened "
+                + absolute_html_path
+                + " in browser.",
+                "",
+                0,
+            )
 
     except subprocess.TimeoutExpired:
-        return "", f"⏱️ Execution timed out after {timeout_sec} seconds (possible infinite loop).", 1
+        return (
+            "",
+            "Timed out after "
+            + str(timeout_seconds)
+            + " seconds.",
+            1,
+        )
+    except OSError as error:
+        return "", str(error), 1
+
+    return "", "Unsupported language: " + language, 1
 
 
-def background_compiler_worker(english_code, target_lang):
-    """Processes local AI inference, compilation, and execution inside a worker thread."""
+def generation_worker(user_prompt, target_language):
     try:
-        # 1. Verify system toolchain before doing heavy inference
-        ok, err_msg = check_toolchain_availability(target_lang)
-        if not ok:
-            update_terminal(f"\n{err_msg}\n")
-            reset_ui_state(("Missing Toolchain", err_msg, True))
+        toolchain_available, toolchain_error = (
+            check_toolchain(target_language)
+        )
+
+        if not toolchain_available:
+            write_terminal("\n" + toolchain_error + "\n")
+            reset_ui()
             return
 
-        # 2. Load model and generate source code
-        llm = get_embedded_model()
-
-        system_prompt = (
-            f"You are a strict code compiler. Translate the user's plain English programming logic "
-            f"into complete, runnable, syntactically correct {target_lang} source code. Rules:\n"
-            f"1. Conform strictly to {target_lang} syntax and include all necessary imports/using/headers and main entry points.\n"
-            f"2. Output ONLY raw executable {target_lang} code.\n"
-            f"3. Do NOT include markdown code fences (```), explanations, or notes.\n"
-            f"4. Do NOT include blocking interactive input calls (like input(), scanf(), cin, Console.ReadLine(), Scanner) so automated execution completes cleanly."
-        )
-
-        response = llm.create_chat_completion(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Translate this logic into {target_lang}:\n\n{english_code}"}
-            ],
-            temperature=0.0
-        )
-
-        compiled_source = response["choices"][0]["message"]["content"].strip()
-
-        # Strip accidental markdown fences if emitted
-        if compiled_source.startswith("```"):
-            lines = compiled_source.splitlines()
-            compiled_source = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:]).strip()
-
-        update_terminal(f"--- Compiled {target_lang} Source ---\n")
-        update_terminal(compiled_source + "\n")
-        update_terminal("-------------------------------------\n\n")
-
-        # 3. Determine output filename (handle Java public class naming)
-        extension_map = {
+        extensions = {
             "Python": ".py",
             "C": ".c",
             "C++": ".cpp",
@@ -521,88 +991,278 @@ def background_compiler_worker(english_code, target_lang):
             "Java": ".java",
             "JavaScript": ".js",
             "TypeScript": ".ts",
-            "HTML & CSS": ".html"
+            "HTML & CSS": ".html",
         }
 
-        if target_lang == "Java":
-            match = re.search(r'public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)', compiled_source)
-            base_name = match.group(1) if match else "Main"
-            output_file_name = f"{base_name}.java"
-        else:
-            output_file_name = f"output{extension_map.get(target_lang, '.txt')}"
+        default_extension = extensions[target_language]
+        workspace_context = build_workspace_context()
 
-        with open(output_file_name, "w", encoding="utf-8") as out_file:
-            out_file.write(compiled_source)
+        system_prompt = (
+            "You are an expert software programmer. "
+            "Return only runnable source code. "
+            "Use this exact format for each file:\n"
+            "===FILE: relative/path===\n"
+            "file contents\n"
+            "Do not use Markdown code fences."
+        )
 
-        # 4. Compile and run
-        stdout, stderr, returncode = execute_compiled_artifact(
-            target_lang, output_file_name, compiled_source
+        user_prompt_full = (
+            "Target language: "
+            + target_language
+            + "\n"
+            "Instruction:\n"
+            + user_prompt
+            + "\n\n"
+            "Existing workspace:\n"
+            + workspace_context
+        )
+
+        raw_output = generate([
+            {
+                "role": "system",
+                "content": system_prompt,
+            },
+            {
+                "role": "user",
+                "content": user_prompt_full,
+            },
+        ])
+
+        generated_files = parse_multi_file_output(
+            raw_output,
+            "main" + default_extension,
+        )
+
+        safe_generated_files = {}
+
+        for relative_path, content in generated_files.items():
+            full_path = safe_workspace_path(relative_path)
+
+            if full_path:
+                safe_generated_files[relative_path] = content
+            else:
+                write_terminal(
+                    "Skipped unsafe path: "
+                    + relative_path
+                    + "\n"
+                )
+
+        if not safe_generated_files:
+            raise ValueError(
+                "The model did not provide a valid output file."
+            )
+
+        save_workspace_snapshot(
+            list(safe_generated_files)
+        )
+
+        written_files = []
+
+        for relative_path, content in safe_generated_files.items():
+            full_path = safe_workspace_path(relative_path)
+
+            if not full_path:
+                continue
+
+            os.makedirs(
+                os.path.dirname(full_path),
+                exist_ok=True,
+            )
+
+            with open(full_path, "w", encoding="utf-8") as file_handle:
+                file_handle.write(content)
+
+            written_files.append(relative_path)
+
+        code_text.delete("1.0", tk.END)
+        code_text.insert(
+            "1.0",
+            next(iter(safe_generated_files.values())),
+        )
+
+        refresh_file_tree()
+
+        entry_file = next(
+            (
+                filename
+                for filename in written_files
+                if filename.lower().endswith(default_extension)
+            ),
+            written_files[0],
+        )
+
+        if target_language == "Java":
+            public_class_match = re.search(
+                r"public\s+class\s+(\w+)",
+                safe_generated_files.get(entry_file, ""),
+            )
+
+            if public_class_match:
+                class_name = public_class_match.group(1)
+                old_path = safe_workspace_path(entry_file)
+                new_relative_path = class_name + ".java"
+                new_path = safe_workspace_path(new_relative_path)
+
+                if old_path and new_path:
+                    os.makedirs(
+                        os.path.dirname(new_path),
+                        exist_ok=True,
+                    )
+                    os.replace(old_path, new_path)
+                    entry_file = new_relative_path
+
+        write_terminal("\nRunning " + entry_file + "...\n")
+
+        stdout, stderr, return_code = execute_program(
+            target_language,
+            entry_file,
+            safe_generated_files.get(entry_file, ""),
         )
 
         if stdout:
-            update_terminal(f"\n💻 Program Output:\n{stdout}\n")
+            write_terminal(stdout)
+
         if stderr:
-            update_terminal(f"\n⚠️ Compiler / Runtime Diagnostics:\n{stderr}\n")
-        if not stdout and not stderr:
-            update_terminal("\n💻 Execution Complete (No stdout returned).\n")
+            write_terminal(stderr)
 
-        if returncode == 0:
-            reset_ui_state((
-                "Build & Run Success",
-                f"Source built and executed cleanly!\nSaved as '{output_file_name}'.",
-                False
-            ))
-        else:
-            reset_ui_state((
-                "Build / Runtime Error",
-                f"Process exited with code {returncode}. Check the terminal log for details.",
-                True
-            ))
+        write_terminal(
+            "\nExit code: "
+            + str(return_code)
+            + "\n"
+        )
 
-    except Exception as e:
-        update_terminal(f"\n❌ Operational Processing Error:\n{e}\n")
-        reset_ui_state(("Error", str(e), True))
+        if (
+            return_code != 0
+            and auto_fix_var.get()
+        ):
+            for retry_number in range(2):
+                fix_prompt = (
+                    "Fix the following "
+                    + target_language
+                    + " error. "
+                    "Preserve runnable code and return every "
+                    "file using ===FILE: path=== blocks.\n\n"
+                    "Error:\n"
+                    + stderr
+                    + "\n\nCode:\n"
+                    + next(
+                        iter(safe_generated_files.values())
+                    )
+                )
+
+                fixed_output = generate([
+                    {
+                        "role": "system",
+                        "content": system_prompt,
+                    },
+                    {
+                        "role": "user",
+                        "content": fix_prompt,
+                    },
+                ])
+
+                fixed_files = parse_multi_file_output(
+                    fixed_output,
+                    entry_file,
+                )
+
+                for relative_path, content in fixed_files.items():
+                    full_path = safe_workspace_path(relative_path)
+
+                    if not full_path:
+                        continue
+
+                    os.makedirs(
+                        os.path.dirname(full_path),
+                        exist_ok=True,
+                    )
+
+                    with open(full_path, "w", encoding="utf-8") as file_handle:
+                        file_handle.write(content)
+
+                refresh_file_tree()
+
+                stdout, stderr, return_code = execute_program(
+                    target_language,
+                    entry_file,
+                    next(
+                        iter(fixed_files.values())
+                    ),
+                )
+
+                if stdout:
+                    write_terminal(stdout)
+
+                if stderr:
+                    write_terminal(stderr)
+
+                write_terminal(
+                    "\nRetry "
+                    + str(retry_number + 1)
+                    + " exit code: "
+                    + str(return_code)
+                    + "\n"
+                )
+
+                if return_code == 0:
+                    break
+
+    except Exception as error:
+        write_terminal(
+            "\nOperational Error:\n"
+            + str(error)
+            + "\n"
+        )
+    finally:
+        reset_ui()
 
 
-def start_compilation():
-    english_code = code_input.get("1.0", tk.END).strip()
-    target_lang = language_var.get()
+def start_generation(event=None):
+    prompt = prompt_text.get("1.0", tk.END).strip()
 
-    if not english_code:
-        messagebox.showwarning("Empty Editor", "Please enter plain English instructions in the editor.")
+    if not prompt:
+        messagebox.showwarning(
+            "Missing instruction",
+            "Describe what you want to build.",
+        )
         return
 
-    terminal_output.config(state=tk.NORMAL)
-    terminal_output.delete("1.0", tk.END)
-    terminal_output.config(state=tk.DISABLED)
+    generate_button.config(
+        state=tk.DISABLED,
+        text="Working...",
+    )
 
-    update_terminal(f"🤖 Transpiling English into {target_lang}...\n\n")
-    run_button.config(state=tk.DISABLED, text="⏳ Processing...")
+    write_terminal(
+        "Generating "
+        + language_var.get()
+        + " code...\n"
+    )
 
     threading.Thread(
-        target=background_compiler_worker,
-        args=(english_code, target_lang),
-        daemon=True
+        target=generation_worker,
+        args=(prompt, language_var.get()),
+        daemon=True,
     ).start()
 
 
-# --- Footer Action Toolbar ---
-bottom_frame = tk.Frame(root, bg="#1e1e1e")
-bottom_frame.pack(fill=tk.X, side=tk.BOTTOM, pady=15)
-
-run_button = tk.Button(
-    bottom_frame,
-    text="⚡ Compile & Execute Logic",
-    font=("Segoe UI", 11, "bold"),
-    fg="#ffffff",
-    bg="#007acc",
-    activebackground="#005999",
-    padx=25,
-    command=start_compilation
+backend_dropdown.bind(
+    "<<ComboboxSelected>>",
+    sync_model_dropdown,
 )
-run_button.pack()
+refresh_models_button.config(
+    command=sync_model_dropdown,
+)
+open_folder_button.config(command=open_workspace_folder)
+undo_button.config(command=undo_last_edit)
+file_listbox.bind(
+    "<<ListboxSelect>>",
+    open_selected_file,
+)
+generate_button.config(command=start_generation)
+clear_terminal_button.config(
+    command=lambda: terminal_text.delete("1.0", tk.END)
+)
 
-# Run initial PATH diagnostic check & auto-installer prompt on launch
-check_all_toolchains_on_startup()
-
+refresh_file_tree()
+sync_model_dropdown()
 root.mainloop()
