@@ -13,6 +13,7 @@ SolidCompression=yes
 
 [Files]
 Source: "dist\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "icon\arb_icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\ARB Universal IDE"; Filename: "{app}\app.exe"; WorkingDir: "{app}"
