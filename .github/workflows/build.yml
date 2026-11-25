@@ -69,3 +69,26 @@ jobs:
         with:
           name: windows-installer
           path: installer_output/ARB_Universal_IDE.exe
+
+  publish-sourceforge:
+    needs: build-windows
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+
+      - name: Upload Installer & README to SourceForge
+        env:
+          SSH_KEY: ${{ secrets.SF_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no" ARB_Universal_IDE.exe README.md \
+            ${{ secrets.SF_USERNAME }}@frs.sourceforge.net:/home/frs/project/${{ secrets.SF_PROJECT }}/${{ github.ref_name }}/
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no" README.md \
+            ${{ secrets.SF_USERNAME }}@frs.sourceforge.net:/home/frs/project/${{ secrets.SF_PROJECT }}/
