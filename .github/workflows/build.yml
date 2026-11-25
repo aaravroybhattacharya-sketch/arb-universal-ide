@@ -63,3 +63,9 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Upload Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: installer_output/ARB_Universal_IDE.exe
