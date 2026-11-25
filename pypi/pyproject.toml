@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arb-universal-ide"
-version = "2.0.4"
-description = "100% offline AI multi-language compiler IDE powered by embedded local Qwen 2.5 Coder 7B."
+version = "2.0.5"
+description = "100% offline, multi-model AI IDE that converts plain English into runnable multi-file projects across 8 languages."
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [
     { name = "Aarav Roy Bhattacharya" }
 ]
-keywords = ["ai", "ide", "compiler", "offline-ai", "local-llm", "qwen", "llama-cpp-python", "code-generator"]
+keywords = ["ai", "ide", "compiler", "offline-ai", "local-llm", "qwen", "ollama", "lm-studio", "code-generator"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -28,9 +28,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://vercel.app"
-Repository = "https://github.com"
-Issues = "https://github.com/issues"
+Homepage = "https://arb-universal-ide.vercel.app"
+Repository = "https://github.com/aaravroybhattacharya-sketch/arb-universal-ide"
+Issues = "https://github.com/aaravroybhattacharya-sketch/arb-universal-ide/issues"
 
 [tool.setuptools]
 py-modules = ["app"]
