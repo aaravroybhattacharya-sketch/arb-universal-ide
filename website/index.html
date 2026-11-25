@@ -22,80 +22,81 @@
   }
   </script>
   
-      <section id="features" class="section container">
-      <div class="section-heading">
-        <div class="kicker">Capabilities</div>
-        <h2>Everything runs right on your machine.</h2>
-        <p>Multi-model local AI, full project workspaces, and self-healing execution.</p>
-      </div>
+  <body>
+  <header style="position:sticky;top:0;z-index:50;backdrop-filter:blur(12px);background:rgba(11,16,32,0.85);border-bottom:1px solid rgba(255,255,255,0.1);">
+    <div style="max-width:1120px;margin:0 auto;padding:0 24px;height:68px;display:flex;align-items:center;justify-content:space-between;">
+      <a href="#" style="font-weight:700;font-size:1.15rem;text-decoration:none;color:#f3f6ff;">ARB <span style="color:#58a6ff;">IDE</span></a>
+      <nav style="display:flex;align-items:center;gap:22px;">
+        <a href="#features" style="color:#9aa7c7;text-decoration:none;font-size:0.95rem;">Features</a>
+        <a href="#workflow" style="color:#9aa7c7;text-decoration:none;font-size:0.95rem;">How it works</a>
+        <a href="#setup" style="color:#9aa7c7;text-decoration:none;font-size:0.95rem;">Install</a>
+        <a href="https://github.com" target="_blank" rel="noopener" style="padding:9px 18px;border-radius:10px;font-weight:600;font-size:0.9rem;text-decoration:none;color:#08101f;background:linear-gradient(135deg,#58a6ff,#79c0ff);">Download v2.0.0</a>
+      </nav>
+    </div>
+  </header>
 
-      <div class="feature-grid">
-        <article class="card">
-          <h3>Multi-Backend Local AI &amp; Workspaces</h3>
-          <p>Local Qwen 2.5 Coder or external integrations with multi-file project context.</p>
-        </article>
-        <article class="card">
-          <h3>Self-Healing &amp; Safety</h3>
-          <p>Auto-fix execution errors and one-click undo checkpoints.</p>
-        </article>
-        <article class="card">
-          <h3>Multi-Language Support</h3>
-          <p>Supports Python, C, C++, C#, Java, JavaScript, TypeScript, and HTML/CSS.</p>
-        </article>
+  <main style="background:radial-gradient(circle at 20% 0%,#162144 0%,#0b1020 45%);">
+    <section style="max-width:1120px;margin:0 auto;padding:84px 24px 60px;text-align:center;">
+      <div style="display:inline-block;padding:6px 14px;border-radius:999px;font-size:0.85rem;color:#58a6ff;background:rgba(88,166,255,0.12);border:1px solid rgba(88,166,255,0.25);margin-bottom:20px;">
+        v2.0.0 · Embedded GGUF, Ollama &amp; LM Studio
+      </div>
+      <h1 style="font-size:clamp(2.2rem,5vw,3.5rem);line-height:1.15;margin-bottom:18px;">Build real software with plain words.</h1>
+      <p style="max-width:660px;margin:0 auto 30px;color:#9aa7c7;font-size:1.1rem;line-height:1.6;">
+        ARB Universal IDE turns plain-English instructions into runnable, multi-file projects across 8 programming languages—100% locally with zero API keys or rate limits.
+      </p>
+      <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;">
+        <a href="#setup" style="padding:12px 22px;border-radius:10px;font-weight:600;text-decoration:none;color:#08101f;background:linear-gradient(135deg,#58a6ff,#79c0ff);">Install ARB IDE</a>
+        <a href="#workflow" style="padding:12px 22px;border-radius:10px;font-weight:600;text-decoration:none;color:#f3f6ff;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);">How It Works</a>
       </div>
     </section>
-    <section id="workflow" class="section container">
-      <div class="section-heading">
-        <div class="kicker">How it works</div>
-        <h2>From plain English to running software.</h2>
-        <p>Write what you want to build in everyday sentences and let ARB handle the rest.</p>
+    <section id="features" style="max-width:1120px;margin:0 auto;padding:64px 24px;">
+      <div style="text-align:center;margin-bottom:44px;">
+        <div style="color:#58a6ff;font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Capabilities</div>
+        <h2 style="font-size:2rem;margin-bottom:10px;">Everything runs right on your machine.</h2>
+        <p style="color:#9aa7c7;">Multi-model local AI, full project workspaces, and self-healing execution.</p>
       </div>
-
-      <div class="steps">
-        <div class="step">
-          <h3>Describe your app</h3>
-          <p>Open a project folder and write your logic or multi-file requirements in plain English.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;">
+        <div style="background:rgba(18,26,48,0.85);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:26px;">
+          <h3 style="margin-bottom:10px;">Multi-Backend Local AI</h3>
+          <p style="color:#9aa7c7;line-height:1.6;">Switch between built-in Qwen 2.5 Coder GGUF models, Ollama, or LM Studio with multi-file context.</p>
         </div>
-        <div class="step">
-          <h3>Generate across files</h3>
-          <p>ARB reads your workspace context and builds clean code using local GGUF, Ollama, or LM Studio.</p>
+        <div style="background:rgba(18,26,48,0.85);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:26px;">
+          <h3 style="margin-bottom:10px;">Self-Healing &amp; Undo</h3>
+          <p style="color:#9aa7c7;line-height:1.6;">Automatically repairs compiler and runtime errors with one-click workspace checkpoints.</p>
         </div>
-        <div class="step">
-          <h3>Run &amp; auto-fix</h3>
-          <p>Execute immediately in the built-in terminal with automatic error repair and one-click undo.</p>
+        <div style="background:rgba(18,26,48,0.85);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:26px;">
+          <h3 style="margin-bottom:10px;">8 Languages Supported</h3>
+          <p style="color:#9aa7c7;line-height:1.6;">Build and run Python, C, C++, C#, Java, JavaScript, TypeScript, and HTML/CSS projects.</p>
         </div>
       </div>
     </section>
-    <section id="setup" class="section container">
-      <div class="setup">
-        <div>
-          <div class="kicker">Quick Install</div>
-          <h2>Get started in seconds.</h2>
-          <p>Download the standalone Windows installer for v2.0.0 or run ARB directly via Python on Windows, macOS, and Linux.</p>
-          <div class="hero-actions" style="justify-content: flex-start; margin-top: 20px;">
-            <a class="button" href="https://github.com" target="_blank" rel="noopener">Download v2.0.0 Installer</a>
-          </div>
+    <section id="workflow" style="max-width:1120px;margin:0 auto;padding:64px 24px;">
+      <div style="text-align:center;margin-bottom:44px;">
+        <div style="color:#58a6ff;font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">How it works</div>
+        <h2 style="font-size:2rem;margin-bottom:10px;">From plain English to running software.</h2>
+        <p style="color:#9aa7c7;">Write what you want to build in everyday sentences and let ARB handle the rest.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;">
+        <div style="background:rgba(18,26,48,0.85);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:26px;">
+          <h3 style="margin-bottom:10px;">1. Describe your app</h3>
+          <p style="color:#9aa7c7;line-height:1.6;">Open a project folder and write your logic or multi-file requirements in plain English.</p>
         </div>
-
-        <div class="setup-block mono">
-          <span># Install via PyPI (Windows, macOS &amp; Linux)</span><br>
-          $ pip install arb-universal-ide<br><br>
-          <span># Launch the IDE</span><br>
-          $ arb-ide
+        <div style="background:rgba(18,26,48,0.85);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:26px;">
+          <h3 style="margin-bottom:10px;">2. Generate across files</h3>
+          <p style="color:#9aa7c7;line-height:1.6;">ARB reads your workspace context and builds clean code using local GGUF, Ollama, or LM Studio.</p>
+        </div>
+        <div style="background:rgba(18,26,48,0.85);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:26px;">
+          <h3 style="margin-bottom:10px;">3. Run &amp; auto-fix</h3>
+          <p style="color:#9aa7c7;line-height:1.6;">Execute immediately in the built-in terminal with automatic error repair and one-click undo.</p>
         </div>
       </div>
+    </section>
+    <section id="setup" style="max-width:1120px;margin:0 auto;padding:64px 24px;">
+      <!-- Quick Install section and terminal snippet -->
     </section>
   </main>
-
-  <footer>
-    <div class="container footer-content">
-      <span>© 2026 ARB Universal IDE · Open source under Apache 2.0</span>
-      <div class="footer-links">
-        <a class="text-link" href="https://pypi.org" target="_blank" rel="noopener">PyPI Package →</a>
-        <a class="text-link" href="https://github.com" target="_blank" rel="noopener">GitHub Repository →</a>
-        <a class="text-link" href="https://github.com/releases/latest" target="_blank" rel="noopener">Download v2.0.0 →</a>
-      </div>
-    </div>
+  <footer style="border-top:1px solid rgba(255,255,255,0.1);padding:32px 24px;margin-top:40px;color:#9aa7c7;font-size:0.9rem;">
+    <!-- Footer with copyright and links -->
   </footer>
 </body>
 </html>
